@@ -1,0 +1,14 @@
+# System 1: Simple RAG (Monolith) — Chunking + Vector Store
+chunking:
+  strategy: "recursive"       # RecursiveCharacterTextSplitter
+  chunk_size: 1000            # Characters per chunk
+  chunk_overlap: 200          # Overlap between chunks
+
+retrieval:
+  top_k: 5                    # Number of chunks to retrieve
+  search_type: "similarity"   # similarity | mmr
+
+vectorstore:
+  provider: "chromadb"
+  persist_directory: "data/vectorstores/rag_monolith"
+  collection_name: "sec_10k_filings"
