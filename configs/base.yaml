@@ -11,6 +11,10 @@ embedding:
 sec_edgar:
   # User-Agent is required by SEC — set via SEC_EDGAR_EMAIL in .env
   rate_limit_seconds: 0.15  # SEC allows max 10 req/sec
+  http_timeout: 120          # Generous timeout for large/old filings
+  max_retries: 3
+  backoff_min: 5             # Exponential backoff minimum (seconds)
+  backoff_max: 60            # Exponential backoff maximum (seconds)
 
 evaluation:
   # 1. Quality Metrics (H1, H2, H3)
@@ -45,3 +49,5 @@ companies:
     name: Microsoft Corporation
   - ticker: AMZN
     name: Amazon.com Inc.
+  - ticker: GOOGL
+    name: Alphabet Inc.

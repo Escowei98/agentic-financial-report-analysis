@@ -21,6 +21,13 @@ dependencies = [
     "google-genai>=1.0",
     # SEC EDGAR data access
     "edgartools>=3.0",
+    # Robust retry with exponential backoff
+    "tenacity>=8.0",
+    # SEC SGML filing parser (handles older filing formats)
+    "datamule>=0.5",
+    # Explicit transitive deps (currently via edgartools)
+    "httpx>=0.27",
+    "lxml>=5.0",
     # Vector store
     "chromadb>=0.5",
     # Evaluation

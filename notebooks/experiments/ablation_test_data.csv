@@ -1,0 +1,22 @@
+#;Typ;Doc(s);Query;GT-Wert (manuell);Source (manuell);Rationale (H)
+1;Single;AAPL_2024;Was war der Gesamtumsatz (Total Revenue) FY2024?;$391 Mrd;Item 7;Basis KPI
+2;Single;AAPL_2024;Net Income FY2024?;$93,7 Mrd;Item 8;Profit
+3;Single;AAPL_2024;Debt-to-Equity Ratio Ende FY2024?;540,90%;Balance Sheet;Solvency H3
+4;Multi-Year;AAPL_22/24;YoY-Wachstum Umsatz 2024 vs. 2022?;-0,80%;Item 7 beide;H1 Cross-Doc
+5;Cross-Sec;AAPL_2024;Operating Margin FY2024?;31,50%;MD&A;Synthese H2
+6;Single;MSFT_2024;Total Revenue FY2024?;$245,1 Mrd;Item 7;-
+7;Single;MSFT_2024;Net Income FY2024?;$88,1 Mrd;Item 8;-
+8;Single;MSFT_2024;Debt/Equity Ratio FY2024?;76,30%;Balance Sheet;-
+9;Multi-Year;MSFT_22/24;YoY Net Income Change 2024 vs. 2022?;23,60%;Item 8 beide;H1
+10;Cross-Sec;MSFT_2024;Operating Margin FY2024?;44,60%;MD&A;H2
+11;Cross-Sec;MSFT_2024;Azure Revenue % vom Total FY2024?;43%;Segment Info;H3
+12;Single;AMZN_2024;Total Revenue FY2024?;$638,0 Mrd;Item 7;-
+13;Single;AMZN_2024;Net Income FY2024?;$59,3 Mrd;Item 8;-
+14;Single;AMZN_2024;Debt-to-Equity FY2024?;118,50%;Balance Sheet;-
+15;Multi-Year;AMZN_22/24;AWS Revenue YoY-Wachstum 2024 vs. 2022?;24,10%;Segment beide;H1
+16;Cross-Sec;AMZN_2024;Operating Income Margin Gesamt FY2024?;10,70%;MD&A;H2
+17;Single;GOOGL_2024;Total Revenue FY2024?;$352,6 Mrd;Item 7;-
+18;Single;GOOGL_2024;Net Income FY2024?;$89,6 Mrd;Item 8;-
+19;Single;GOOGL_2024;Debt/Equity Ratio FY2024?;44,50%;Balance Sheet;-
+20;Multi-Year;GOOGL_22/24;Advertising Revenue YoY 2024 vs. 2022?;24,70%;Segment beide;H1
+21;Cross-Sec;GOOGL_2024;Operating Margin FY2024?;31,00%;MD&A;H2
