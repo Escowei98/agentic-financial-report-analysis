@@ -46,7 +46,8 @@ def load_config(system_name: str | None = None) -> dict:
             config = _deep_merge(config, system_config)
 
     # Inject environment variables
-    config["google_api_key"] = os.getenv("GOOGLE_API_KEY", "")
+    config["google_cloud_project"] = os.getenv("GOOGLE_CLOUD_PROJECT", "")
+    config["google_cloud_location"] = os.getenv("GOOGLE_CLOUD_LOCATION", "global")
     config["sec_edgar_email"] = os.getenv("SEC_EDGAR_EMAIL", "")
 
     return config

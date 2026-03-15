@@ -1,11 +1,11 @@
 # Shared configuration for all systems
 llm:
-  model: "gemini-2.0-flash"
+  model: "gemini-3-flash-preview"
   temperature: 0.0          # Deterministic for reproducibility
   max_output_tokens: 8192
 
 embedding:
-  model: "text-embedding-004"
+  model: "gemini-embedding-001"
   dimensions: 768
 
 sec_edgar:
