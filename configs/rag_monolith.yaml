@@ -1,15 +1,15 @@
 # System 1: Simple RAG (Monolith) — Chunking + Hybrid Retrieval + Reranking
 chunking:
-  strategy: "recursive"       # RecursiveCharacterTextSplitter
-  chunk_size: 1000            # Optuna: [1000..2000, step=500]
-  chunk_overlap_pct: 0.20     # Optuna: [0.10, 0.20] → overlap = chunk_size * pct
+  strategy: "recursive" # RecursiveCharacterTextSplitter
+  chunk_size: 2000 # Optuna best value
+  chunk_overlap_pct: 0.10 # Optuna best value
 
 retrieval:
-  mode: "hybrid"              # BM25 + Dense (EnsembleRetriever)
-  bm25_weight: 0.3            # Optuna: [0.3..0.7, step=0.2]
-  dense_weight: 0.7           # = 1 - bm25_weight
-  pre_rerank_top_k: 20        # Optuna: [15..25, step=5]
-  post_rerank_top_k: 5        # Optuna: [3..8]
+  mode: "hybrid" # BM25 + Dense (EnsembleRetriever)
+  bm25_weight: 0.3 # Optuna best value
+  dense_weight: 0.7 # = 1 - bm25_weight
+  pre_rerank_top_k: 15 # Optuna best value
+  post_rerank_top_k: 5 # Optuna best value
 
 reranker:
   enabled: true

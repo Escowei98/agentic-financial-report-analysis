@@ -1,7 +1,7 @@
 # Shared configuration for all systems
 llm:
-  model: "gemini-3-flash-preview"
-  temperature: 0.0          # Deterministic for reproducibility
+  model: "gemini-2.5-flash"
+  temperature: 0.0 # Deterministic for reproducibility
   max_output_tokens: 8192
 
 embedding:
@@ -10,37 +10,37 @@ embedding:
 
 sec_edgar:
   # User-Agent is required by SEC — set via SEC_EDGAR_EMAIL in .env
-  rate_limit_seconds: 0.15  # SEC allows max 10 req/sec
-  http_timeout: 120          # Generous timeout for large/old filings
+  rate_limit_seconds: 0.15 # SEC allows max 10 req/sec
+  http_timeout: 120 # Generous timeout for large/old filings
   max_retries: 3
-  backoff_min: 5             # Exponential backoff minimum (seconds)
-  backoff_max: 60            # Exponential backoff maximum (seconds)
+  backoff_min: 5 # Exponential backoff minimum (seconds)
+  backoff_max: 60 # Exponential backoff maximum (seconds)
 
 evaluation:
   # 1. Quality Metrics (H1, H2, H3)
   quality_metrics:
-    ragas:                              # Out-of-the-box RAGAS metrics
-      - faithfulness                    # H2: Hallucination detection
-      - answer_relevancy               # General answer quality
-      - context_precision              # RAG retrieval signal-to-noise
-      - context_recall                 # RAG retrieval completeness
-      - answer_correctness             # Answer vs. gold standard
-    custom:                             # Custom-implemented metrics
-      - exact_match                    # H2: Numerical accuracy for financial data
-      - answer_recall                  # H1/H3: Fact completeness vs. gold standard
-      - cross_document_success_rate    # H1/H3: Multi-document synthesis success
+    ragas: # Out-of-the-box RAGAS metrics
+      - faithfulness # H2: Hallucination detection
+      - answer_relevancy # General answer quality
+      - context_precision # RAG retrieval signal-to-noise
+      - context_recall # RAG retrieval completeness
+      - answer_correctness # Answer vs. gold standard
+    custom: # Custom-implemented metrics
+      - exact_match # H2: Numerical accuracy for financial data
+      - answer_recall # H1/H3: Fact completeness vs. gold standard
+      - cross_document_success_rate # H1/H3: Multi-document synthesis success
 
   # 2. Efficiency Metrics (Trade-Off Analysis)
   efficiency_metrics:
-    - total_token_usage                # Input + output tokens per query
-    - end_to_end_latency               # Wall-clock time per query (seconds)
-    - cost_per_correct_answer          # Derived: total_cost / correct_answers
+    - total_token_usage # Input + output tokens per query
+    - end_to_end_latency # Wall-clock time per query (seconds)
+    - cost_per_correct_answer # Derived: total_cost / correct_answers
 
   # 3. Agent & Process Metrics (System 2 & 4 only)
   agent_metrics:
-    - tool_selection_accuracy          # Did the agent pick the right tool?
-    - correction_rate                  # H2: How often did reviewer catch errors? (Sys 4)
-    - number_of_steps                  # Complexity indicator per query
+    - tool_selection_accuracy # Did the agent pick the right tool?
+    - correction_rate # H2: How often did reviewer catch errors? (Sys 4)
+    - number_of_steps # Complexity indicator per query
 
 companies:
   - ticker: AAPL

@@ -257,7 +257,7 @@ def _extract_primary_doc_from_sgml(sgml_content: str) -> str:
     then converts it to clean text.
     """
     try:
-        from secsgml import parse_sgml_submission
+        from secsgml import parse_sgml_submission # type: ignore
 
         # Parse SGML into documents
         documents = parse_sgml_submission(sgml_content)

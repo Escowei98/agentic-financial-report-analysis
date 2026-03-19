@@ -8,7 +8,7 @@ Purpose:
   (max_output_tokens=16384 in ragas_evaluator.py).
 
 Usage (from notebook):
-    from src.ablation.validate_top_configs import validate_top_configs
+    from src.systems.rag_monolith.ablation.validate_top_configs import validate_top_configs
     results = validate_top_configs(filings, gold_standard, study, top_n=5)
 """
 
