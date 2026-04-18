@@ -1,23 +1,22 @@
 # System 2: Single-Agent RAG (LangGraph ReAct Agent)
 # Uses the same retrieval stack as System 1, but with autonomous tool-use.
-
 agent:
-  max_iterations: 5          # Max tool-call loops per query (prevents infinite loops)
-  timeout_seconds: 60        # Total query timeout
-  recursion_limit: 12        # LangGraph recursion limit (> 2*max_iterations)
+  max_iterations: 5 # Max tool-call loops per query (prevents infinite loops)
+  timeout_seconds: 60 # Total query timeout
+  recursion_limit: 12 # LangGraph recursion limit (> 2*max_iterations)
 
 # Retrieval: IDENTICAL to monolith for fair comparison
 chunking:
   strategy: "recursive"
-  chunk_size: 1000
-  chunk_overlap_pct: 0.10
+  chunk_size: 1000 # source: best_config.yaml
+  chunk_overlap_pct: 0.10 # source: best_config.yaml (overlap)
 
 retrieval:
   mode: "hybrid"
-  bm25_weight: 0.5
-  dense_weight: 0.5
-  pre_rerank_top_k: 15
-  post_rerank_top_k: 4
+  bm25_weight: 0.5 # source: best_config.yaml
+  dense_weight: 0.5 # derived: 1 - bm25_weight
+  pre_rerank_top_k: 15 # source: best_config.yaml (pre_rerank_k)
+  post_rerank_top_k: 4 # source: best_config.yaml (post_rerank_k)
 
 reranker:
   enabled: true
@@ -26,5 +25,5 @@ reranker:
 
 vectorstore:
   provider: "chromadb"
-  persist_directory: "data/vectorstores/rag_monolith"  # SHARED with System 1!
+  persist_directory: "data/vectorstores/rag_monolith" # SHARED with System 1!
   collection_name: "sec_10k_filings"

@@ -68,7 +68,7 @@ def get_llm(system_name: str | None = None, **kwargs) -> ChatVertexAI:
         )
 
     params = {
-        "model_name": llm_config.get("model", "gemini-2.0-flash"),
+        "model_name": llm_config.get("model", "gemini-2.5-flash"),
         "temperature": llm_config.get("temperature", 0.0),
         "max_output_tokens": llm_config.get("max_output_tokens", 8192),
         "project": project,

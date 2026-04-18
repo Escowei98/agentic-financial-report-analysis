@@ -33,21 +33,22 @@ class RunMetrics:
     latency_seconds: float = 0.0
     num_steps: int = 0
     tool_calls: list[str] = field(default_factory=list)
-    corrections: int = 0  # For System 4 reviewer corrections
+    corrections: int = 0  # Correction rounds triggered by reflection (Sys2) or reviewer (Sys4)
 
     @property
     def estimated_cost_usd(self) -> float:
         """
-        Estimate cost based on Gemini 2.0 Flash pricing.
+        Estimate cost based on Gemini 2.5 Flash pricing (standard tier).
 
-        Pricing (as of Feb 2026):
-        - Input: $0.10 / 1M tokens (< 128k), $0.40 / 1M tokens (> 128k)
-        - Output: $0.40 / 1M tokens (< 128k), $1.60 / 1M tokens (> 128k)
+        Pricing (as of 2026-04, Vertex AI standard tier):
+        - Input: $0.30 / 1M tokens
+        - Output: $2.50 / 1M tokens
 
-        Uses lower-tier pricing as a conservative estimate.
+        Matches the model configured in configs/base.yaml (gemini-2.5-flash).
+        Update both this constant and base.yaml when changing the model.
         """
-        input_cost = self.token_usage.prompt_tokens * 0.10 / 1_000_000
-        output_cost = self.token_usage.completion_tokens * 0.40 / 1_000_000
+        input_cost = self.token_usage.prompt_tokens * 0.30 / 1_000_000
+        output_cost = self.token_usage.completion_tokens * 2.50 / 1_000_000
         return input_cost + output_cost
 
 
