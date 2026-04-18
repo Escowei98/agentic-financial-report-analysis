@@ -88,7 +88,12 @@ def create_objective(
             pipeline._llm = cached["llm"]
 
             # Rebuild only the hybrid retriever with new weights
-            from src.systems.rag_monolith.retriever import build_hybrid_retriever
+            from src.common.config import load_config
+            from src.common.retrieval import (
+                build_hybrid_retriever,
+                build_vectorstore,
+                rerank_documents,
+            )
             pipeline._retriever = build_hybrid_retriever(
                 vectorstore=pipeline._vectorstore,
                 documents=pipeline._documents,

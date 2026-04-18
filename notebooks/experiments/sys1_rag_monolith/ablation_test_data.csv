@@ -1,22 +1,78 @@
-#;Typ;Doc(s);Query;GT-Wert (manuell);Source (manuell);Rationale (H)
-1;Single;AAPL_2024;Was war der Gesamtumsatz (Total Revenue) FY2024?;$391 Mrd;Item 7;Basis KPI
-2;Single;AAPL_2024;Net Income FY2024?;$93,7 Mrd;Item 8;Profit
-3;Single;AAPL_2024;Debt-to-Equity Ratio Ende FY2024?;540,90%;Balance Sheet;Solvency H3
-4;Multi-Year;AAPL_22/24;YoY-Wachstum Umsatz 2024 vs. 2022?;-0,80%;Item 7 beide;H1 Cross-Doc
-5;Cross-Sec;AAPL_2024;Operating Margin FY2024?;31,50%;MD&A;Synthese H2
-6;Single;MSFT_2024;Total Revenue FY2024?;$245,1 Mrd;Item 7;-
-7;Single;MSFT_2024;Net Income FY2024?;$88,1 Mrd;Item 8;-
-8;Single;MSFT_2024;Debt/Equity Ratio FY2024?;76,30%;Balance Sheet;-
-9;Multi-Year;MSFT_22/24;YoY Net Income Change 2024 vs. 2022?;23,60%;Item 8 beide;H1
-10;Cross-Sec;MSFT_2024;Operating Margin FY2024?;44,60%;MD&A;H2
-11;Cross-Sec;MSFT_2024;Azure Revenue % vom Total FY2024?;43%;Segment Info;H3
-12;Single;AMZN_2024;Total Revenue FY2024?;$638,0 Mrd;Item 7;-
-13;Single;AMZN_2024;Net Income FY2024?;$59,3 Mrd;Item 8;-
-14;Single;AMZN_2024;Debt-to-Equity FY2024?;118,50%;Balance Sheet;-
-15;Multi-Year;AMZN_22/24;AWS Revenue YoY-Wachstum 2024 vs. 2022?;24,10%;Segment beide;H1
-16;Cross-Sec;AMZN_2024;Operating Income Margin Gesamt FY2024?;10,70%;MD&A;H2
-17;Single;GOOGL_2024;Total Revenue FY2024?;$352,6 Mrd;Item 7;-
-18;Single;GOOGL_2024;Net Income FY2024?;$89,6 Mrd;Item 8;-
-19;Single;GOOGL_2024;Debt/Equity Ratio FY2024?;44,50%;Balance Sheet;-
-20;Multi-Year;GOOGL_22/24;Advertising Revenue YoY 2024 vs. 2022?;24,70%;Segment beide;H1
-21;Cross-Sec;GOOGL_2024;Operating Margin FY2024?;31,00%;MD&A;H2
+ID;Typ;Doc(s);Query;GT-Wert;Source;Rationale
+1;Single;AAPL_2024;Gesamtumsatz (Total Revenue) FY2024?;$391 Mrd;Item 7;Basis KPI
+2;Single;AAPL_2024;Net Income FY2024?;$93.7 Mrd;Item 8;Profit
+3;Single;AAPL_2024;Debt-to-Equity Ratio Ende FY2024?;540.9%;Balance Sheet;Solvency H3
+4;Single;AAPL_2023;Gesamtumsatz FY2023?;$383.3 Mrd;Item 7;Basis
+5;Single;AAPL_2023;Net Income FY2023?;$97.0 Mrd;Item 8;Profit
+6;Single;MSFT_2024;Total Revenue FY2024?;$245.1 Mrd;Item 7;Basis
+7;Single;MSFT_2024;Net Income FY2024?;$88.1 Mrd;Item 8;Profit
+8;Single;MSFT_2024;Debt/Equity Ratio FY2024?;76.3%;Balance Sheet;Solvency
+9;Single;MSFT_2023;Total Revenue FY2023?;$211.9 Mrd;Item 7;Basis
+10;Single;MSFT_2023;Net Income FY2023?;$72.3 Mrd;Item 8;Profit
+11;Single;AMZN_2024;Total Revenue FY2024?;$638.0 Mrd;Item 7;Basis
+12;Single;AMZN_2024;Net Income FY2024?;$59.3 Mrd;Item 8;Profit
+13;Single;AMZN_2024;Debt-to-Equity FY2024?;118.5%;Balance Sheet;Solvency
+14;Single;AMZN_2023;Total Revenue FY2023?;$574.8 Mrd;Item 7;Basis
+15;Single;AMZN_2023;Net Income FY2023?;$30.4 Mrd;Item 8;Profit
+16;Single;GOOGL_2024;Total Revenue FY2024?;$352.6 Mrd;Item 7;Basis
+17;Single;GOOGL_2024;Net Income FY2024?;$89.6 Mrd;Item 8;Profit
+18;Single;GOOGL_2024;Debt/Equity Ratio FY2024?;44.5%;Balance Sheet;Solvency
+19;Single;GOOGL_2023;Total Revenue FY2023?;$307.4 Mrd;Item 7;Basis
+20;Single;GOOGL_2023;Net Income FY2023?;$73.8 Mrd;Item 8;Profit
+21;Cross-Sec;AAPL_2024;Operating Margin FY2024?;31.5%;MD&A + Income Stmt;Synthese H2
+22;Cross-Sec;AAPL_2024;Free Cash Flow FY2024?;$108.8 Mrd;Cash Flow + MD&A;Synthese
+23;Cross-Sec;AAPL_2024;iPhone % vom Gesamtumsatz FY2024?;52%;Item 7 + Segment Info;Synthese
+24;Cross-Sec;AAPL_2023;Operating Margin FY2023?;30.8%;MD&A + Income Stmt;Synthese H2
+25;Cross-Sec;AAPL_2023;R&D als % vom Umsatz FY2023?;7.8%;Income Stmt + MD&A;Synthese
+26;Cross-Sec;MSFT_2024;Operating Margin FY2024?;44.6%;MD&A + Income Stmt;Synthese H2
+27;Cross-Sec;MSFT_2024;Azure Revenue % vom Total FY2024?;43%;Segment Info + Item 7;Synthese H3
+28;Cross-Sec;MSFT_2024;Cloud Segment Profit Margin FY2024?;46%;MD&A + Segment Info;Synthese
+29;Cross-Sec;MSFT_2023;Operating Margin FY2023?;42.3%;MD&A + Income Stmt;Synthese
+30;Cross-Sec;MSFT_2023;CapEx FY2023?;$28.1 Mrd;Cash Flow + MD&A;Synthese
+31;Cross-Sec;AMZN_2024;Operating Margin Gesamt FY2024?;10.7%;MD&A + Income Stmt;Synthese H2
+32;Cross-Sec;AMZN_2024;AWS Operating Margin FY2024?;29.6%;Segment Info + MD&A;Synthese H3
+33;Cross-Sec;AMZN_2024;International Segment Loss/Profit FY2024?;$-1.3 Mrd;Segment Info + MD&A;Synthese
+34;Cross-Sec;AMZN_2023;Operating Margin Gesamt FY2023?;6.4%;MD&A + Income Stmt;Synthese H2
+35;Cross-Sec;AMZN_2023;AWS % vom Gesamtumsatz FY2023?;16%;Segment Info + Item 7;Synthese
+36;Cross-Sec;GOOGL_2024;Operating Margin FY2024?;31.0%;MD&A + Income Stmt;Synthese H2
+37;Cross-Sec;GOOGL_2024;Google Cloud Operating Margin FY2024?;9.5%;Segment Info + MD&A;Synthese H3
+38;Cross-Sec;GOOGL_2024;Werbeumsatz % vom Total FY2024?;76%;Item 7 + Segment Info;Synthese
+39;Cross-Sec;GOOGL_2023;Operating Margin FY2023?;27.4%;MD&A + Income Stmt;Synthese H2
+40;Cross-Sec;GOOGL_2023;Headcount Entwicklung FY2023?;-4%;Item 1 + MD&A;Synthese
+41;Multi-Year;AAPL_22/24;YoY-Wachstum Umsatz 2024 vs. 2022?;-0.8%;Item 7 beide;H1 Cross-Doc
+42;Multi-Year;AAPL_23/24;YoY Umsatzwachstum 24 vs 23?;2.0%;Item 7 beide;H1 Cross-Doc
+43;Multi-Year;AAPL_23/24;YoY Net Income Change 24 vs 23?;-3.4%;Item 8 beide;H1
+44;Multi-Year;AAPL_22/23/24;Trend Operating Margin 22->23->24 (steigend/fallend)?;Leicht steigend;MD&A;H1 Trend
+45;Multi-Year;AAPL_22/24;Veränderung R&D Ausgaben 24 vs 22?;+$3.8 Mrd;Income Stmt;H1
+46;Multi-Year;MSFT_22/24;YoY Net Income Change 2024 vs. 2022?;23.6%;Item 8 beide;H1 Cross-Doc
+47;Multi-Year;MSFT_23/24;YoY Umsatzwachstum 24 vs 23?;15.6%;Item 7 beide;H1 Cross-Doc
+48;Multi-Year;MSFT_23/24;YoY Azure Revenue Growth 24 vs 23?;30%;Segment Info;H1
+49;Multi-Year;MSFT_22/23/24;Trend CapEx 22->23->24 (steigend/fallend)?;Stark steigend;Cash Flow;H1 Trend
+50;Multi-Year;MSFT_22/24;Veränderung Mitarbeiterzahl 24 vs 22?;+7,000;Item 1 beide;H1
+51;Multi-Year;AMZN_22/24;AWS YoY-Wachstum 2024 vs. 2022?;24.1%;Segment beide;H1 Cross-Doc
+52;Multi-Year;AMZN_23/24;YoY Umsatzwachstum Gesamt 24 vs 23?;11.0%;Item 7 beide;H1 Cross-Doc
+53;Multi-Year;AMZN_23/24;YoY Net Income Turnaround 24 vs 23?;+$28.9 Mrd;Item 8 beide;H1
+54;Multi-Year;AMZN_22/23/24;Trend AWS Operating Margin 22-24?;Fallend dann steigend;Segment Info;H1 Trend
+55;Multi-Year;AMZN_22/24;Veränderung Fulfillment Costs 24 vs 22?;+$12 Mrd;MD&A;H1
+57;Multi-Year;GOOGL_23/24;YoY Umsatzwachstum 24 vs 23?;14.7%;Item 7 beide;H1 Cross-Doc
+58;Multi-Year;GOOGL_23/24;YoY Cloud Revenue Growth 24 vs 23?;26%;Segment Info;H1
+61;Multi-Comp;AAPL/MSFT_24;Welches Unternehmen hatte mehr Gesamtumsatz FY2024, AAPL oder MSFT?;AAPL ($391 Mrd > $245 Mrd);Item 7 beide;H4 Cross-Firm
+62;Multi-Comp;AAPL/MSFT_24;Welches Unternehmen hatte höheres Net Income FY2024?;AAPL ($93.7 Mrd > $88.1 Mrd);Item 8 beide;H4 Cross-Firm
+63;Multi-Comp;AMZN/GOOGL_24;Differenz im Gesamtumsatz zwischen AMZN und GOOGL FY2024?;$285.4 Mrd;Item 7 beide;H4 Cross-Firm
+64;Multi-Comp;MSFT/GOOGL_24;Welches Unternehmen hatte mehr Net Income FY2024, MSFT oder GOOGL?;GOOGL ($89.6 Mrd > $88.1 Mrd);Item 8 beide;H4 Cross-Firm
+65;Multi-Comp;AAPL/AMZN_24;Welches Unternehmen hatte den höheren Gesamtumsatz FY2024?;AMZN ($638 Mrd > $391 Mrd);Item 7 beide;H4 Cross-Firm
+66;Multi-Comp;AAPL/MSFT_24;Wer hatte die höhere Operating Margin FY2024, AAPL oder MSFT?;MSFT (44.6% > 31.5%);MD&A beide;H4 Margin
+67;Multi-Comp;AMZN/GOOGL_24;Wer hatte die höhere Operating Margin FY2024, AMZN oder GOOGL?;GOOGL (31.0% > 10.7%);MD&A beide;H4 Margin
+68;Multi-Comp;AAPL/AMZN_24;Ist die Debt/Equity Ratio von AAPL höher als von AMZN FY2024?;Ja (540.9% > 118.5%);Balance Sheet beide;H4 Solvency
+69;Multi-Comp;MSFT/GOOGL_24;Wer hat die niedrigere Debt/Equity Ratio FY2024?;GOOGL (44.5% < 76.3%);Balance Sheet beide;H4 Solvency
+70;Multi-Comp;AAPL/GOOGL_24;Wer hatte die höhere Gross Margin FY2024?;GOOGL (~56% > 44%);MD&A beide;H4 Margin
+71;Multi-Comp;MSFT/AMZN_24;Cloud/Segment: Wer hatte mehr AWS oder Azure Umsatz in FY2024?;Azure ($105 Mrd > AWS $90 Mrd);Segment Info beide;H4 Cloud
+72;Multi-Comp;MSFT/GOOGL_24;Cloud/Segment: Wer hatte mehr Azure oder Google Cloud Umsatz FY2024?;Azure ($105 Mrd > Cloud $33 Mrd);Segment Info beide;H4 Cloud
+73;Multi-Comp;AAPL/MSFT_23/24;Wer hatte höheres YoY Umsatzwachstum 24 vs 23, AAPL oder MSFT?;MSFT (15.6% > 2.0%);Item 7 alle;H4 Growth
+74;Multi-Comp;AMZN/GOOGL_23/24;Wer hatte höheres YoY Net Income Wachstum 24 vs 23?;AMZN (+95% > GOOGL +21%);Item 8 alle;H4 Growth
+75;Multi-Comp;AAPL/AMZN_24;Wer generierte mehr Operating Cash Flow FY2024?;AMZN ($119 Mrd > AAPL $110 Mrd);Cash Flow beide;H4 Cash Flow
+76;Multi-Comp;All_4_2024;Welches der 4 Unternehmen hatte den höchsten Gesamtumsatz FY2024?;AMZN ($638 Mrd);Item 7 alle;H4 Max/Min
+77;Multi-Comp;All_4_2024;Welches der 4 Unternehmen hatte das höchste Net Income FY2024?;AAPL ($93.7 Mrd);Item 8 alle;H4 Max/Min
+78;Multi-Comp;All_4_2024;Welches Unternehmen hatte die höchste Operating Margin FY2024?;MSFT (44.6%);MD&A alle;H4 Max/Min
+79;Multi-Comp;All_4_2024;Welches Unternehmen hatte den niedrigsten Gesamtumsatz FY2024?;MSFT ($245.1 Mrd);Item 7 alle;H4 Max/Min
+80;Multi-Comp;All_4_2024;Welches Unternehmen hat die höchste Debt/Equity Ratio FY2024?;AAPL (540.9%);Balance Sheet alle;H4 Max/Min

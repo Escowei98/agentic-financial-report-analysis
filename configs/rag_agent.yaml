@@ -1,0 +1,30 @@
+# System 2: Single-Agent RAG (LangGraph ReAct Agent)
+# Uses the same retrieval stack as System 1, but with autonomous tool-use.
+
+agent:
+  max_iterations: 5          # Max tool-call loops per query (prevents infinite loops)
+  timeout_seconds: 60        # Total query timeout
+  recursion_limit: 12        # LangGraph recursion limit (> 2*max_iterations)
+
+# Retrieval: IDENTICAL to monolith for fair comparison
+chunking:
+  strategy: "recursive"
+  chunk_size: 1000
+  chunk_overlap_pct: 0.10
+
+retrieval:
+  mode: "hybrid"
+  bm25_weight: 0.5
+  dense_weight: 0.5
+  pre_rerank_top_k: 15
+  post_rerank_top_k: 4
+
+reranker:
+  enabled: true
+  provider: "flashrank"
+  model: "ms-marco-MiniLM-L-12-v2"
+
+vectorstore:
+  provider: "chromadb"
+  persist_directory: "data/vectorstores/rag_monolith"  # SHARED with System 1!
+  collection_name: "sec_10k_filings"

@@ -44,6 +44,8 @@ dependencies = [
     "pydantic>=2.0",
     "pydantic-settings>=2.0",
     "flashrank>=0.2.10",
+    # Safe math expression evaluator (System 2 calculate tool)
+    "simpleeval>=1.0",
 ]
 
 [dependency-groups]

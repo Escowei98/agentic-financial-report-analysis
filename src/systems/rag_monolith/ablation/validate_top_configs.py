@@ -95,7 +95,6 @@ def validate_top_configs(
             pipeline._vectorstore = cached["vectorstore"]
             pipeline._llm = cached["llm"]
 
-            from src.systems.rag_monolith.retriever import build_hybrid_retriever
             pipeline._retriever = build_hybrid_retriever(
                 vectorstore=pipeline._vectorstore,
                 documents=pipeline._documents,

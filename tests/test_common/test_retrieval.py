@@ -5,9 +5,12 @@ Unit tests for the hybrid retriever module.
 import pytest
 from langchain_core.documents import Document
 
-from src.systems.rag_monolith.retriever import BM25RetrieverWithScores
-
-
+from src.common.retrieval import (
+    BM25RetrieverWithScores,
+    HybridRetriever,
+    build_hybrid_retriever,
+    retrieve,
+)
 class TestBM25RetrieverWithScores:
     """Tests for BM25RetrieverWithScores."""
 

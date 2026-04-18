@@ -17,13 +17,9 @@ from langchain_core.prompts import ChatPromptTemplate
 from src.common.config import load_config
 from src.common.ingestion import ProcessedFiling
 from src.common.llm_client import get_embeddings, get_llm
+from src.common.retrieval import build_hybrid_retriever, build_vectorstore, retrieve
 from src.common.utils import RunMetrics, TokenUsage
 from src.systems.rag_monolith.chunker import chunk_filings
-from src.systems.rag_monolith.retriever import (
-    build_hybrid_retriever,
-    build_vectorstore,
-    retrieve,
-)
 
 logger = logging.getLogger(__name__)
 

@@ -1,10 +1,11 @@
 """
-Hybrid Retriever for System 1 (Monolith RAG).
+Shared hybrid retrieval components for RAG systems.
 
 Combines BM25 (sparse) and ChromaDB (dense) retrieval via weighted
 Reciprocal Rank Fusion (RRF), followed by FlashRank reranking for final scoring.
 
-Non-agentic — all components are stateless scoring/ranking models.
+Used by System 1 (Monolith) and System 2 (Agent) to guarantee
+identical retrieval behavior for fair architectural comparison.
 """
 
 import logging
