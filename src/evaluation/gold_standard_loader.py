@@ -24,6 +24,7 @@ class GoldStandardItem:
     doc_refs: str           # e.g., "AAPL_2024", "MSFT_22/24"
     source_section: str     # e.g., "Item 7", "Balance Sheet"
     rationale: str          # e.g., "Basis KPI", "H1 Cross-Doc"
+    entity_form: str | None = None  # v2 only: "ticker" or "name"
 
 
 def load_gold_standard(
@@ -74,6 +75,9 @@ def load_gold_standard(
             ground_truth = row[4].strip()
             source_section = row[5].strip() if len(row) > 5 else ""
             rationale = row[6].strip() if len(row) > 6 else ""
+            # v2 gold-standard adds an 'entity_form' column (ticker|name);
+            # remains None when loading the original v1 CSV for backward compatibility.
+            entity_form = row[7].strip() if len(row) > 7 and row[7].strip() else None
 
             # Apply type filter
             if filter_types and query_type not in filter_types:
@@ -87,6 +91,7 @@ def load_gold_standard(
                 doc_refs=doc_refs,
                 source_section=source_section,
                 rationale=rationale,
+                entity_form=entity_form,
             ))
 
     logger.info(
