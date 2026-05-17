@@ -1,10 +1,13 @@
 """
-RAGAS evaluation wrapper for the ablation study.
+RAGAS evaluation wrapper.
 
-Evaluates RAG pipeline outputs using three RAGAS metrics:
+Evaluates RAG pipeline outputs using five RAGAS metrics:
   - Context Precision: Are the retrieved contexts relevant?
   - Context Recall: Do retrieved contexts cover the ground truth?
   - Faithfulness: Is the answer grounded in the contexts?
+  - Answer Relevancy: Does the answer address the user's question?
+  - Answer Correctness: How well does the answer match the ground truth
+    (semantic + factual)?
 
 Uses Gemini as the LLM judge via langchain-google-genai.
 """
@@ -14,6 +17,8 @@ from dataclasses import dataclass
 
 from ragas import evaluate
 from ragas.dataset_schema import EvaluationDataset, SingleTurnSample
+from ragas.metrics._answer_correctness import answer_correctness
+from ragas.metrics._answer_relevance import answer_relevancy
 from ragas.metrics._context_precision import context_precision
 from ragas.metrics._context_recall import context_recall
 from ragas.metrics._faithfulness import faithfulness
@@ -24,30 +29,43 @@ from src.evaluation.gold_standard_loader import GoldStandardItem
 
 logger = logging.getLogger(__name__)
 
-# The three RAGAS metrics for the ablation study (pre-instantiated singletons)
-ABLATION_METRICS = [context_precision, context_recall, faithfulness]
+# The five RAGAS metrics (pre-instantiated singletons). Name kept as
+# ABLATION_METRICS for backward compatibility with existing consumers.
+ABLATION_METRICS = [
+    context_precision,
+    context_recall,
+    faithfulness,
+    answer_relevancy,
+    answer_correctness,
+]
 
 
 @dataclass
 class EvalScores:
-    """Evaluation scores from a single ablation run."""
+    """Evaluation scores from a single evaluation run."""
 
     context_precision: float
     context_recall: float
     faithfulness: float
+    answer_relevancy: float
+    answer_correctness: float
 
     @property
     def composite_score(self) -> float:
         """
-        Weighted composite score for Optuna optimization.
+        Equal-weighted mean across all five RAGAS metrics.
 
-        Equal weighting across all three metrics.
+        Used as a coarse single-number summary; not a thesis-grade
+        result on its own. Hypotheses are evaluated against the
+        individual metrics plus the custom metrics from base.yaml.
         """
         return (
             self.context_precision
             + self.context_recall
             + self.faithfulness
-        ) / 3.0
+            + self.answer_relevancy
+            + self.answer_correctness
+        ) / 5.0
 
     def to_dict(self) -> dict:
         """Return scores as dict."""
@@ -55,6 +73,8 @@ class EvalScores:
             "context_precision": round(self.context_precision, 4),
             "context_recall": round(self.context_recall, 4),
             "faithfulness": round(self.faithfulness, 4),
+            "answer_relevancy": round(self.answer_relevancy, 4),
+            "answer_correctness": round(self.answer_correctness, 4),
             "composite_score": round(self.composite_score, 4),
         }
 
@@ -84,7 +104,8 @@ def evaluate_run(
         contexts: Retrieved contexts per query (list of string lists).
 
     Returns:
-        EvalScores with context_precision, context_recall, faithfulness.
+        EvalScores with context_precision, context_recall, faithfulness,
+        answer_relevancy, answer_correctness.
     """
     if len(gold_standard) != len(answers) or len(gold_standard) != len(contexts):
         raise ValueError(
@@ -134,12 +155,15 @@ def evaluate_run(
         context_precision=_mean(result["context_precision"]),
         context_recall=_mean(result["context_recall"]),
         faithfulness=_mean(result["faithfulness"]),
+        answer_relevancy=_mean(result["answer_relevancy"]),
+        answer_correctness=_mean(result["answer_correctness"]),
     )
 
     logger.info(
-        "RAGAS scores: precision=%.3f, recall=%.3f, faithfulness=%.3f → composite=%.3f",
-        scores.context_precision, scores.context_recall,
-        scores.faithfulness, scores.composite_score,
+        "RAGAS scores: precision=%.3f, recall=%.3f, faithfulness=%.3f, "
+        "ans_relevancy=%.3f, ans_correctness=%.3f → composite=%.3f",
+        scores.context_precision, scores.context_recall, scores.faithfulness,
+        scores.answer_relevancy, scores.answer_correctness, scores.composite_score,
     )
 
     return scores
