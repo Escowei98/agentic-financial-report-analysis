@@ -5,7 +5,6 @@ Tests content type detection, SGML extraction, hybrid section extraction,
 and the retry-decorated download helpers.
 """
 
-import pytest
 
 from src.common.ingestion import (
     _detect_content_type,
@@ -14,7 +13,6 @@ from src.common.ingestion import (
     _html_to_text,
     _strip_html_tags,
 )
-
 
 # ---------------------------------------------------------------------------
 #  Content type detection

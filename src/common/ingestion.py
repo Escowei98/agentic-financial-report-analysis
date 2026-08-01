@@ -18,7 +18,6 @@ import json
 import logging
 import os
 import re
-import tempfile
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -43,12 +42,15 @@ PROJECT_ROOT = Path(__file__).parent.parent.parent
 DATA_RAW = PROJECT_ROOT / "data" / "raw"
 DATA_PROCESSED = PROJECT_ROOT / "data" / "processed"
 
-# 10-K section header patterns for regex-based fallback extraction
+# 10-K section header patterns for regex-based fallback extraction.
+# `FINANCIAL\s*STATE\s*MENTS?` tolerates intra-word whitespace between "STATE"
+# and "MENTS" as seen in EDGAR text-conversions of MSFT FY2023/FY2024 filings
+# (e.g. "FINANCIAL STATE MENTS AND SUPPLEMENTARY DATA").
 SECTION_PATTERNS = {
     "Business": r"(?:ITEM\s*1[\.:\s]|ITEM\s*1\b)(?!\d)\s*[\-—–]?\s*(?:BUSINESS)",
     "Risk Factors": r"ITEM\s*1A[\.:\s]\s*[\-—–]?\s*(?:RISK\s*FACTORS)",
     "MD&A": r"ITEM\s*7[\.:\s]\s*[\-—–]?\s*(?:MANAGEMENT.S?\s*DISCUSSION)",
-    "Financial Statements": r"ITEM\s*8[\.:\s]\s*[\-—–]?\s*(?:FINANCIAL\s*STATEMENTS)",
+    "Financial Statements": r"ITEM\s*8[\.:\s]\s*[\-—–]?\s*(?:FINANCIAL\s*STATE\s*MENTS?)",
     "Directors and Corporate Governance": r"ITEM\s*10[\.:\s]\s*[\-—–]?\s*(?:DIRECTORS)",
 }
 
@@ -58,6 +60,13 @@ TENK_DIRECT_ATTRS = {
     "risk_factors": "Risk Factors",
     "management_discussion": "MD&A",
     "directors_officers_and_governance": "Directors and Corporate Governance",
+}
+
+# Item-based lookups via TenK.__getitem__ for sections without direct properties.
+# Routed through edgartools' `sections` parser (with fallback to `chunked_document`
+# and `CrossReferenceIndex`), which is more robust than the regex fallback.
+TENK_ITEM_LOOKUPS = {
+    "Item 8": "Financial Statements",
 }
 
 
@@ -257,7 +266,7 @@ def _extract_primary_doc_from_sgml(sgml_content: str) -> str:
     then converts it to clean text.
     """
     try:
-        from secsgml import parse_sgml_submission # type: ignore
+        from secsgml import parse_sgml_submission  # type: ignore
 
         # Parse SGML into documents
         documents = parse_sgml_submission(sgml_content)
@@ -610,7 +619,16 @@ def _extract_sections_from_text(full_text: str) -> dict[str, str]:
 
 
 def _extract_sections_edgartools(filing) -> dict[str, str]:
-    """Extract key sections using edgartools' TenK parser."""
+    """Extract key sections using edgartools' TenK parser.
+
+    Uses two complementary extraction paths:
+    1. Direct property access (business, risk_factors, ...) for sections
+       that expose a stable attribute on the TenK object.
+    2. `TenK.__getitem__("Item N")` for sections without a direct property
+       (currently Item 8 / Financial Statements). This routes through
+       edgartools' modern `sections`-parser and is markedly more robust
+       against atypical filings than the regex fallback.
+    """
     sections = {}
     tenk = filing.obj()
 
@@ -623,6 +641,16 @@ def _extract_sections_edgartools(filing) -> dict[str, str]:
                     sections[section_name] = text
         except Exception as e:
             logger.warning("Could not extract .%s: %s", attr_name, e)
+
+    for item_key, section_name in TENK_ITEM_LOOKUPS.items():
+        try:
+            content = tenk[item_key]
+            if content is not None:
+                text = str(content).strip()
+                if text:
+                    sections[section_name] = text
+        except Exception as e:
+            logger.warning("Could not extract %s via __getitem__: %s", item_key, e)
 
     return sections
 
