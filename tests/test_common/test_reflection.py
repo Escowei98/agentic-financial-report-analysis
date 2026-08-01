@@ -2,11 +2,11 @@
 Unit tests for the Reflexion-style reflection verifier.
 """
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 from langchain_core.messages import AIMessage, HumanMessage
 
-from src.systems.rag_agent.reflection import (
+from src.common.reflection import (
     ReflectionVerdict,
     build_reflection_chain,
     generate_feedback_message,

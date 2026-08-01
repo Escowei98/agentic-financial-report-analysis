@@ -8,9 +8,9 @@ import pytest
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from langgraph.graph.state import CompiledStateGraph
 
-from src.systems.rag_agent.pipeline import AgentRAGPipeline, AgentRAGResult
-from src.systems.rag_agent.reflection import ReflectionVerdict
 from src.common.ingestion import FilingMetadata, ProcessedFiling
+from src.common.reflection import ReflectionVerdict
+from src.systems.rag_agent.pipeline import AgentRAGPipeline, AgentRAGResult
 
 
 def _make_mock_filings(num: int = 2) -> list[ProcessedFiling]:

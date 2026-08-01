@@ -37,6 +37,7 @@ Answer the user's question by reading and citing the relevant filing(s)
 in your context. Quote precise numbers exactly as they appear; never
 estimate or round mentally. Always cite the source using the format
 "({TICKER}, FY{YEAR}, {SECTION_NAME})".
+IMPORTANT: ALWAYS reply in English. Use standard English number formatting (e.g. 1,000.50). NEVER use German number formatting.
 """
 
 

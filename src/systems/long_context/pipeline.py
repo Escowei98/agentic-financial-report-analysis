@@ -29,15 +29,15 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from src.common.config import load_config
 from src.common.ingestion import ProcessedFiling
 from src.common.llm_client import get_llm
-from src.common.utils import RunMetrics, TokenUsage
-from src.systems.long_context.agent import build_agent
-from src.systems.long_context.prompt import build_system_prompt
-from src.systems.rag_agent.reflection import (
+from src.common.reflection import (
     ReflectionVerdict,
     build_reflection_chain,
     generate_feedback_message,
     unpack_reflection_result,
 )
+from src.common.utils import RunMetrics, TokenUsage, extract_text
+from src.systems.long_context.agent import build_agent
+from src.systems.long_context.prompt import build_system_prompt
 from src.systems.rag_agent.tools.calculate import calculate
 from src.systems.rag_agent.tools.list_filings import create_list_filings_tool
 
@@ -321,6 +321,8 @@ class LongContextPipeline:
         total_prompt = 0
         total_completion = 0
 
+        tool_call_index: dict[str, int] = {}  # tool_call_id -> index into tool_calls_log
+
         for msg in messages:
             if isinstance(msg, AIMessage):
                 usage = getattr(msg, "usage_metadata", None)
@@ -333,14 +335,23 @@ class LongContextPipeline:
                         tool_calls_log.append({
                             "tool": tc["name"],
                             "args": tc["args"],
+                            "result": "",
                         })
+                        tool_call_index[tc["id"]] = len(tool_calls_log) - 1
 
                 if msg.content and not msg.tool_calls:
-                    answer = msg.content
+                    answer = extract_text(msg.content)
 
             elif isinstance(msg, ToolMessage):
+                # Linked back to tool_calls_log via tool_call_id so the
+                # trajectory formatter can show calculate/list_filings
+                # outputs, not just which tool was called.
                 if msg.content:
-                    contexts.append(msg.content)
+                    result_text = extract_text(msg.content)
+                    contexts.append(result_text)
+                    idx = tool_call_index.get(msg.tool_call_id)
+                    if idx is not None:
+                        tool_calls_log[idx]["result"] = result_text
 
         token_usage = TokenUsage(
             prompt_tokens=total_prompt,

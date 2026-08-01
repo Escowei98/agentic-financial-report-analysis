@@ -17,9 +17,8 @@ from langchain_core.prompts import ChatPromptTemplate
 from src.common.config import load_config
 from src.common.ingestion import ProcessedFiling
 from src.common.llm_client import get_embeddings, get_llm
-from src.common.retrieval import build_hybrid_retriever, build_vectorstore, retrieve
-from src.common.utils import RunMetrics, TokenUsage
-from src.systems.rag_monolith.chunker import chunk_filings
+from src.common.retrieval import build_hybrid_retriever, build_vectorstore, load_or_build_documents, retrieve
+from src.common.utils import RunMetrics, TokenUsage, compute_filings_hash
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +30,8 @@ RAG_PROMPT = ChatPromptTemplate.from_messages([
         "based ONLY on the provided context from SEC 10-K filings. "
         "If the context does not contain the answer, say so explicitly. "
         "Be precise with numbers — include exact figures from the filings. "
-        "Always cite the source section when possible."
+        "Always cite the source section when possible. "
+        "IMPORTANT: ALWAYS reply in English. Use standard English number formatting (e.g. 1,000.50)."
     ),
     (
         "human",
@@ -121,10 +121,14 @@ class MonolithRAGPipeline:
         Build the RAG pipeline from processed filings.
 
         Steps:
-          1. Chunk filings into Documents
-          2. Build ChromaDB vectorstore
-          3. Build hybrid retriever (BM25 + Dense)
+          1. Chunk filings into Documents (or load from cache)
+          2. Build ChromaDB vectorstore (or load from cache)
+          3. Build hybrid retriever with BM25 (or load from cache)
           4. Initialize LLM
+
+        All intermediate artefacts are persisted under a content-addressed
+        directory so that repeated runs with the same filings and config
+        skip the expensive embedding / indexing work entirely.
 
         Args:
             filings: Processed SEC 10-K filings.
@@ -143,20 +147,22 @@ class MonolithRAGPipeline:
             chunk_size, overlap_pct * 100, bm25_weight, pre_rerank_k,
         )
 
-        # Step 1: Chunk
-        self._documents = chunk_filings(
+        # Compute content-addressed cache path
+        filings_hash = compute_filings_hash(filings)
+        base_dir = vs_config.get("persist_directory", "data/vectorstores/rag_monolith")
+        config_hash = f"cs{chunk_size}_ov{int(overlap_pct*100)}"
+        persist_dir = str(Path(base_dir) / config_hash / filings_hash)
+
+        # Step 1: Chunk (with disk cache)
+        self._documents = load_or_build_documents(
             filings,
+            persist_directory=persist_dir,
             chunk_size=chunk_size,
             overlap_pct=overlap_pct,
         )
 
-        # Step 2: Vectorstore
+        # Step 2: Vectorstore (auto-caches via ChromaDB persistence)
         embeddings = get_embeddings("rag_monolith")
-
-        # Use a unique persist directory per config to avoid collisions
-        base_dir = vs_config.get("persist_directory", "data/vectorstores/rag_monolith")
-        config_hash = f"cs{chunk_size}_ov{int(overlap_pct*100)}"
-        persist_dir = str(Path(base_dir) / config_hash)
 
         self._vectorstore = build_vectorstore(
             documents=self._documents,
@@ -165,12 +171,13 @@ class MonolithRAGPipeline:
             collection_name=vs_config.get("collection_name", "sec_10k_filings"),
         )
 
-        # Step 3: Hybrid retriever
+        # Step 3: Hybrid retriever (BM25 index cached via persist_dir)
         self._retriever = build_hybrid_retriever(
             vectorstore=self._vectorstore,
             documents=self._documents,
             bm25_weight=bm25_weight,
             pre_rerank_top_k=pre_rerank_k,
+            persist_directory=persist_dir,
         )
 
         # Step 4: LLM

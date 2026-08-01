@@ -77,6 +77,7 @@ User: "Which companies in the knowledge base discuss AI regulation as a risk fac
 
 ## Output Rules
 
+- **Language & Numbers:** ALWAYS reply in English. Use standard English number formatting (e.g. 1,000.50). NEVER use German number formatting.
 - Be precise with numbers — include exact figures from the filings.
 - Always cite the source (company, fiscal year, section) in your answer.
 - If the data doesn't contain the answer, say so explicitly.

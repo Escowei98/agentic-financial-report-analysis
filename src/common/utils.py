@@ -1,13 +1,17 @@
 """
-Shared utilities for cost tracking, timing, and logging.
+Shared utilities for cost tracking, timing, logging, and caching.
 
 Used by ALL 4 systems for consistent measurement and fair comparison.
 """
 
+from __future__ import annotations
+
+import hashlib
 import logging
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Sequence
 
 
 @dataclass
@@ -17,6 +21,19 @@ class TokenUsage:
     prompt_tokens: int = 0
     completion_tokens: int = 0
     total_tokens: int = 0
+
+
+def extract_text(content: str | list) -> str:
+    """Extracts text from LLM message content, handling both strings and lists of dicts."""
+    if isinstance(content, str):
+        return content
+    elif isinstance(content, list):
+        parts = []
+        for block in content:
+            if isinstance(block, dict) and "text" in block:
+                parts.append(block["text"])
+        return " ".join(parts)
+    return str(content)
 
 
 @dataclass
@@ -34,6 +51,10 @@ class RunMetrics:
     num_steps: int = 0
     tool_calls: list[str] = field(default_factory=list)
     corrections: int = 0  # Correction rounds triggered by reflection (Sys2) or reviewer (Sys4)
+
+    # Optional S4 (None for S1-S3)
+    num_specialists_invoked: int | None = None
+    token_breakdown: dict[str, int] | None = None  # role -> total_tokens
 
     @property
     def estimated_cost_usd(self) -> float:
@@ -133,3 +154,34 @@ def setup_logging(level: int = logging.INFO) -> None:
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
+
+
+# ---------------------------------------------------------------------------
+#  Caching utilities
+# ---------------------------------------------------------------------------
+
+if TYPE_CHECKING:
+    from src.common.ingestion import ProcessedFiling
+
+
+def compute_filings_hash(filings: Sequence[ProcessedFiling]) -> str:
+    """
+    Compute a deterministic SHA-256 hash for a set of filings.
+
+    The hash is derived from sorted ``ticker:accession_number`` pairs so
+    that the same set of filings always produces the same hash regardless
+    of input order.  This is used as a content-addressed cache key for
+    the vectorstore, BM25 index, and chunked documents.
+
+    Args:
+        filings: Processed SEC 10-K filings.
+
+    Returns:
+        First 12 hex chars of the SHA-256 digest (short but collision-safe
+        for the expected number of distinct filing sets).
+    """
+    keys = sorted(
+        f"{f.metadata.ticker}:{f.metadata.accession_number}" for f in filings
+    )
+    digest = hashlib.sha256("|".join(keys).encode()).hexdigest()
+    return digest[:12]

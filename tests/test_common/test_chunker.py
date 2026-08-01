@@ -2,11 +2,10 @@
 Unit tests for MonolithRAG chunker module.
 """
 
-import pytest
 from langchain_core.documents import Document
 
+from src.common.chunker import chunk_filings
 from src.common.ingestion import FilingMetadata, ProcessedFiling
-from src.systems.rag_monolith.chunker import chunk_filings
 
 
 def _make_filing(

@@ -7,10 +7,9 @@ from langchain_core.documents import Document
 
 from src.common.retrieval import (
     BM25RetrieverWithScores,
-    HybridRetriever,
-    build_hybrid_retriever,
-    retrieve,
 )
+
+
 class TestBM25RetrieverWithScores:
     """Tests for BM25RetrieverWithScores."""
 

@@ -9,7 +9,10 @@ identical retrieval behavior for fair architectural comparison.
 """
 
 import logging
+import pickle
 from collections import defaultdict
+from pathlib import Path
+from typing import Sequence
 
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
@@ -18,7 +21,52 @@ from langchain_core.retrievers import BaseRetriever
 from pydantic import ConfigDict
 from rank_bm25 import BM25Okapi
 
+from src.common.chunker import chunk_filings
+from src.common.ingestion import ProcessedFiling
+
 logger = logging.getLogger(__name__)
+
+
+# ---------------------------------------------------------------------------
+#  Document Chunking
+# ---------------------------------------------------------------------------
+
+def load_or_build_documents(
+    filings: Sequence[ProcessedFiling],
+    persist_directory: str,
+    chunk_size: int = 1000,
+    overlap_pct: float = 0.20,
+) -> list[Document]:
+    """
+    Chunk filings into Documents, or load them from a content-addressed
+    disk cache (``documents.pkl`` under *persist_directory*) if a previous
+    run already chunked the same filings under the same config.
+
+    Args:
+        filings: Processed SEC 10-K filings.
+        persist_directory: Content-addressed cache directory (same one
+            passed to build_vectorstore / build_hybrid_retriever).
+        chunk_size: Target chunk size in characters.
+        overlap_pct: Overlap fraction between adjacent chunks.
+
+    Returns:
+        Chunked LangChain Documents.
+    """
+    docs_cache_path = Path(persist_directory) / "documents.pkl"
+
+    if docs_cache_path.exists():
+        logger.info("⚡ Loading cached documents from %s", docs_cache_path)
+        with open(docs_cache_path, "rb") as f:
+            documents = pickle.load(f)  # noqa: S301
+        logger.info("Loaded %d cached documents", len(documents))
+        return documents
+
+    documents = chunk_filings(filings, chunk_size=chunk_size, overlap_pct=overlap_pct)
+    docs_cache_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(docs_cache_path, "wb") as f:
+        pickle.dump(documents, f, protocol=pickle.HIGHEST_PROTOCOL)
+    logger.info("Documents cached to %s", docs_cache_path)
+    return documents
 
 
 # ---------------------------------------------------------------------------
@@ -34,6 +82,10 @@ def build_vectorstore(
     """
     Create or load a ChromaDB vector store from documents.
 
+    If a persisted ChromaDB database already exists at *persist_directory*,
+    it is loaded directly — skipping all embedding API calls.  Otherwise
+    the store is built from *documents* and persisted for future runs.
+
     Args:
         documents: Chunked LangChain Documents.
         embeddings: Embedding model instance.
@@ -43,6 +95,20 @@ def build_vectorstore(
     Returns:
         ChromaDB vector store instance.
     """
+    chroma_db_path = Path(persist_directory) / "chroma.sqlite3"
+
+    if chroma_db_path.exists():
+        logger.info(
+            "⚡ Loading cached vectorstore from %s", persist_directory,
+        )
+        vectorstore = Chroma(
+            persist_directory=persist_directory,
+            embedding_function=embeddings,
+            collection_name=collection_name,
+        )
+        logger.info("Vectorstore loaded from cache")
+        return vectorstore
+
     logger.info(
         "Building vectorstore: %d docs → %s/%s",
         len(documents), persist_directory, collection_name,
@@ -55,7 +121,7 @@ def build_vectorstore(
         collection_name=collection_name,
     )
 
-    logger.info("Vectorstore built: %d documents indexed", len(documents))
+    logger.info("Vectorstore built and persisted: %d documents indexed", len(documents))
     return vectorstore
 
 
@@ -193,26 +259,53 @@ def build_hybrid_retriever(
     documents: list[Document],
     bm25_weight: float = 0.3,
     pre_rerank_top_k: int = 20,
+    persist_directory: str | None = None,
 ) -> HybridRetriever:
     """
     Build a HybridRetriever combining BM25 and dense retrieval.
+
+    If *persist_directory* is provided and a cached BM25 index exists
+    there (``bm25_index.pkl``), the index is loaded from disk instead
+    of being rebuilt from *documents*.  On a cache miss the freshly
+    built index is written to disk for future runs.
 
     Args:
         vectorstore: ChromaDB vector store.
         documents: Full document list (for BM25 index).
         bm25_weight: Weight for BM25 results (dense_weight = 1 - bm25_weight).
         pre_rerank_top_k: Number of results each retriever returns before reranking.
+        persist_directory: Optional cache directory for the BM25 index.
 
     Returns:
         HybridRetriever combining both retrieval strategies via RRF.
     """
     dense_weight = round(1.0 - bm25_weight, 2)
 
-    # BM25 retriever with score tracking
-    bm25_retriever = BM25RetrieverWithScores(
-        documents=documents,
-        top_k=pre_rerank_top_k,
+    # BM25 retriever — try loading from cache first
+    bm25_cache_path = (
+        Path(persist_directory) / "bm25_index.pkl"
+        if persist_directory
+        else None
     )
+
+    if bm25_cache_path and bm25_cache_path.exists():
+        logger.info("⚡ Loading cached BM25 index from %s", bm25_cache_path)
+        with open(bm25_cache_path, "rb") as f:
+            bm25_retriever = pickle.load(f)  # noqa: S301
+        # Ensure top_k matches current config (may differ from cached value)
+        bm25_retriever.top_k = pre_rerank_top_k
+        logger.info("BM25 index loaded from cache")
+    else:
+        bm25_retriever = BM25RetrieverWithScores(
+            documents=documents,
+            top_k=pre_rerank_top_k,
+        )
+        # Persist for future runs
+        if bm25_cache_path:
+            bm25_cache_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(bm25_cache_path, "wb") as f:
+                pickle.dump(bm25_retriever, f, protocol=pickle.HIGHEST_PROTOCOL)
+            logger.info("BM25 index cached to %s", bm25_cache_path)
 
     # Dense retriever from ChromaDB
     dense_retriever = vectorstore.as_retriever(
@@ -246,8 +339,11 @@ def _get_flashrank_ranker(model_name: str = "ms-marco-MiniLM-L-12-v2"):
     """Return a cached FlashRank Ranker instance (singleton)."""
     global _flashrank_ranker
     if _flashrank_ranker is None:
+        import os
+
         from flashrank import Ranker
-        _flashrank_ranker = Ranker(model_name=model_name)
+        os.makedirs("data/flashrank_cache", exist_ok=True)
+        _flashrank_ranker = Ranker(model_name=model_name, cache_dir="data/flashrank_cache")
         logger.info("FlashRank ranker loaded: %s", model_name)
     return _flashrank_ranker
 

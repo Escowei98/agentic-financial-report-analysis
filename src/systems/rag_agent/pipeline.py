@@ -22,20 +22,19 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from src.common.config import load_config
 from src.common.ingestion import ProcessedFiling
 from src.common.llm_client import get_embeddings, get_llm
-from src.common.retrieval import build_hybrid_retriever, build_vectorstore
-from src.common.utils import RunMetrics, TokenUsage
-from src.systems.rag_agent.agent import build_agent
-from src.systems.rag_agent.reflection import (
+from src.common.reflection import (
     ReflectionVerdict,
     build_reflection_chain,
     generate_feedback_message,
     unpack_reflection_result,
 )
+from src.common.retrieval import build_hybrid_retriever, build_vectorstore, load_or_build_documents
+from src.common.utils import RunMetrics, TokenUsage, compute_filings_hash, extract_text
+from src.systems.rag_agent.agent import build_agent
 from src.systems.rag_agent.tools.calculate import calculate
 from src.systems.rag_agent.tools.list_filings import create_list_filings_tool
 from src.systems.rag_agent.tools.retrieve_chunks import create_retrieve_chunks_tool
 from src.systems.rag_agent.tools.search_section import create_search_section_tool
-from src.systems.rag_monolith.chunker import chunk_filings
 
 logger = logging.getLogger(__name__)
 
@@ -143,12 +142,16 @@ class AgentRAGPipeline:
         Build the Agent RAG pipeline from processed filings.
 
         Steps:
-          1. Chunk filings into Documents (same as monolith)
-          2. Build ChromaDB vectorstore (shared with monolith)
-          3. Build hybrid retriever (BM25 + Dense)
+          1. Chunk filings into Documents (or load from cache)
+          2. Build ChromaDB vectorstore (or load from cache)
+          3. Build hybrid retriever with BM25 (or load from cache)
           4. Create tools with injected dependencies
           5. Build LangGraph agent
           6. (optional) Build reflection chain
+
+        All intermediate artefacts are persisted under a content-addressed
+        directory so that repeated runs with the same filings and config
+        skip the expensive embedding / indexing work entirely.
 
         Args:
             filings: Processed SEC 10-K filings.
@@ -172,18 +175,22 @@ class AgentRAGPipeline:
             chunk_size, overlap_pct * 100, bm25_weight, pre_rerank_k,
         )
 
-        # Step 1: Chunk (identical to monolith)
-        self._documents = chunk_filings(
+        # Compute content-addressed cache path
+        filings_hash = compute_filings_hash(filings)
+        base_dir = vs_config.get("persist_directory", "data/vectorstores/rag_monolith")
+        config_hash = f"cs{chunk_size}_ov{int(overlap_pct * 100)}"
+        persist_dir = str(Path(base_dir) / config_hash / filings_hash)
+
+        # Step 1: Chunk (with disk cache)
+        self._documents = load_or_build_documents(
             filings,
+            persist_directory=persist_dir,
             chunk_size=chunk_size,
             overlap_pct=overlap_pct,
         )
 
-        # Step 2: Vectorstore (SHARED directory with monolith)
+        # Step 2: Vectorstore (auto-caches via ChromaDB persistence)
         embeddings = get_embeddings("rag_agent")
-        base_dir = vs_config.get("persist_directory", "data/vectorstores/rag_monolith")
-        config_hash = f"cs{chunk_size}_ov{int(overlap_pct * 100)}"
-        persist_dir = str(Path(base_dir) / config_hash)
 
         self._vectorstore = build_vectorstore(
             documents=self._documents,
@@ -192,12 +199,13 @@ class AgentRAGPipeline:
             collection_name=vs_config.get("collection_name", "sec_10k_filings"),
         )
 
-        # Step 3: Hybrid retriever
+        # Step 3: Hybrid retriever (BM25 index cached via persist_dir)
         self._retriever = build_hybrid_retriever(
             vectorstore=self._vectorstore,
             documents=self._documents,
             bm25_weight=bm25_weight,
             pre_rerank_top_k=pre_rerank_k,
+            persist_directory=persist_dir,
         )
 
         # Step 4: Create tools
@@ -373,6 +381,8 @@ class AgentRAGPipeline:
         total_prompt = 0
         total_completion = 0
 
+        tool_call_index: dict[str, int] = {}  # tool_call_id -> index into tool_calls_log
+
         for msg in messages:
             if isinstance(msg, AIMessage):
                 # Accumulate token usage from all AI messages
@@ -387,16 +397,25 @@ class AgentRAGPipeline:
                         tool_calls_log.append({
                             "tool": tc["name"],
                             "args": tc["args"],
+                            "result": "",
                         })
+                        tool_call_index[tc["id"]] = len(tool_calls_log) - 1
 
                 # Last AI message with content is the final answer
                 if msg.content and not msg.tool_calls:
-                    answer = msg.content
+                    answer = extract_text(msg.content)
 
             elif isinstance(msg, ToolMessage):
-                # Tool outputs serve as context
+                # Tool outputs serve as context AND are linked back to the
+                # tool_calls_log entry that produced them (via tool_call_id),
+                # so the trajectory formatter can show what was actually
+                # retrieved, not just which tool/args were used.
                 if msg.content:
-                    contexts.append(msg.content)
+                    result_text = extract_text(msg.content)
+                    contexts.append(result_text)
+                    idx = tool_call_index.get(msg.tool_call_id)
+                    if idx is not None:
+                        tool_calls_log[idx]["result"] = result_text
 
         token_usage = TokenUsage(
             prompt_tokens=total_prompt,
