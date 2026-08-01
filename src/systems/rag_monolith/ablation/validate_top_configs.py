@@ -19,8 +19,9 @@ import optuna
 import pandas as pd
 
 from src.common.ingestion import ProcessedFiling
+from src.common.retrieval import build_hybrid_retriever
 from src.evaluation.gold_standard_loader import GoldStandardItem
-from src.evaluation.ragas_evaluator import EvalScores, evaluate_run
+from src.evaluation.ragas_evaluator import evaluate_run
 from src.systems.rag_monolith.pipeline import MonolithRAGPipeline
 
 logger = logging.getLogger(__name__)

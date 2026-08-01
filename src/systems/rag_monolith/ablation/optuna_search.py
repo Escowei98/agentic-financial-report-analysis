@@ -20,7 +20,7 @@ import optuna
 
 from src.common.ingestion import ProcessedFiling
 from src.evaluation.gold_standard_loader import GoldStandardItem
-from src.evaluation.ragas_evaluator import EvalScores, evaluate_run
+from src.evaluation.ragas_evaluator import evaluate_run
 from src.systems.rag_monolith.pipeline import MonolithRAGPipeline
 
 logger = logging.getLogger(__name__)
@@ -88,11 +88,8 @@ def create_objective(
             pipeline._llm = cached["llm"]
 
             # Rebuild only the hybrid retriever with new weights
-            from src.common.config import load_config
             from src.common.retrieval import (
                 build_hybrid_retriever,
-                build_vectorstore,
-                rerank_documents,
             )
             pipeline._retriever = build_hybrid_retriever(
                 vectorstore=pipeline._vectorstore,
