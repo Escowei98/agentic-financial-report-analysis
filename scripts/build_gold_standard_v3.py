@@ -486,6 +486,74 @@ def read_v2_rows() -> list[dict[str, str]]:
 
 
 # ---------------------------------------------------------------------------
+#  Post-migration overrides
+#
+#  Corrections applied after v2 migration when a v2 gt_value has been shown to
+#  disagree with the SEC-source values in the processed markdowns. v2 itself
+#  is frozen (2026-04-29, see EVAL_DECISION_LOG.md) and cannot be edited;
+#  overrides live here so the provenance chain (v2 -> override -> v3) stays
+#  explicit and each correction is auditable via its recorded rationale.
+#
+#  Key: exact match of the entry's `query` field (unique across all 150).
+#  Overrides are applied by `apply_post_migration_overrides()`.
+# ---------------------------------------------------------------------------
+
+INGEST_FIX_OVERRIDES: dict[str, dict[str, str]] = {
+    # id 8: MSFT Debt/Equity FY2024. v2 value 76.3% does not match the
+    # documented convention (Total Liabilities / Total Equity, cf. BACKLOG
+    # 2026-05-08 "Häufige Fallstricke"). MSFT_2024 Item 8 Balance Sheet:
+    # Total liabilities 243,686 / Total stockholders' equity 268,477 = 90.77%.
+    "Wie hoch war die Debt/Equity Ratio von Microsoft in FY2024?": {
+        "gt_value": "90.8%",
+        "note": "corrected 2026-07-25 (was 76.3%; source MSFT 10-K FY2024 Item 8 Balance Sheet: 243,686 / 268,477 = 90.77%)",
+    },
+    # id 46: MSFT Net Income growth FY2022 -> FY2024. v2 value 23.6% does not
+    # match the recomputed value from the Cash Flow Statements
+    # (MSFT_2024 FY2022 col = 72,738; FY2024 col = 88,136 -> 21.17%).
+    "Wie hat sich das Net Income von Microsoft von FY2022 auf FY2024 verändert?": {
+        "gt_value": "21.2%",
+        "note": "corrected 2026-07-25 (was 23.6%; source MSFT 10-K FY2024 Cash Flow Statement: 88,136 / 72,738 - 1 = 21.17%)",
+    },
+    # id 66: MSFT vs GOOGL Debt/Equity FY2024. Both operands were wrong under
+    # the documented convention; comparison winner remains GOOGL.
+    # MSFT_2024: 243,686 / 268,477 = 90.77%
+    # GOOGL_2024 (10K_2025-02-05): Total liabilities 125,172 / Total
+    # stockholders' equity 325,084 = 38.50%
+    "Wer hat die niedrigere Debt/Equity Ratio in FY2024, MSFT oder GOOGL?": {
+        "gt_value": "GOOGL (38.5% < MSFT 90.8%)",
+        "note": "corrected 2026-07-25 (was 'GOOGL (44.5% < MSFT 76.3%)'; MSFT D/E = 243,686/268,477 = 90.8%, GOOGL D/E = 125,172/325,084 = 38.5%; source FY2024 Item 8 Balance Sheets; winner unchanged)",
+    },
+}
+
+
+def apply_post_migration_overrides(entries: list[V3Entry]) -> int:
+    """Apply INGEST_FIX_OVERRIDES to the migrated entries in-place.
+
+    Returns the number of entries that were touched. Raises if an override
+    key does not match any entry (guards against typos or v2 rewordings).
+    """
+    applied = 0
+    for entry in entries:
+        override = INGEST_FIX_OVERRIDES.get(entry.query)
+        if override is None:
+            continue
+        entry.gt_value = override["gt_value"]
+        entry.gt_unit = infer_gt_unit(entry.gt_value)
+        applied += 1
+
+    if applied != len(INGEST_FIX_OVERRIDES):
+        matched_queries = {
+            e.query for e in entries if e.query in INGEST_FIX_OVERRIDES
+        }
+        missing = set(INGEST_FIX_OVERRIDES) - matched_queries
+        raise AssertionError(
+            f"INGEST_FIX_OVERRIDES contains {len(missing)} query keys that "
+            f"did not match any migrated entry: {sorted(missing)}"
+        )
+    return applied
+
+
+# ---------------------------------------------------------------------------
 #  73 newly authored entries
 #
 #  GROUND TRUTH IS DRAFT — USER must verify each entry against the SEC filing
@@ -1218,6 +1286,7 @@ def build_v3() -> list[V3Entry]:
     """Migrate v2 + append 73 new entries; return the full list (no IDs yet)."""
     v2_rows = read_v2_rows()
     migrated = [migrate_v2_row(r) for r in v2_rows]
+    apply_post_migration_overrides(migrated)
 
     new_entries: list[V3Entry] = []
     new_entries.extend(NEW_FA1_ENTRIES)
