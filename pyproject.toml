@@ -32,6 +32,9 @@ dependencies = [
     "chromadb>=0.5",
     # Evaluation
     "ragas>=0.2",
+    # OpenAI (used only as the evaluation judge model, decoupled from the
+    # Gemini models under test — mitigates same-model self-preference bias)
+    "langchain-openai>=0.2",
     # Ablation Study: Hybrid Retrieval + Reranking + Optimization
     "rank-bm25>=0.2",
     "langchain-cohere>=0.3",

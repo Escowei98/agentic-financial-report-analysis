@@ -17,6 +17,15 @@ sec_edgar:
   backoff_max: 60 # Exponential backoff maximum (seconds)
 
 evaluation:
+  # Shared judge LLM for ALL evaluation judging (RAGAS, custom metrics,
+  # reasoning evaluator). Deliberately a different provider than the
+  # Gemini models under test (see src/common/llm_client.py:get_judge_llm)
+  # to avoid same-model self-preference bias in LLM-as-a-judge scoring.
+  judge:
+    provider: "openai"
+    model: "gpt-4o-mini"
+    temperature: 0.0
+
   # 1. Quality Metrics (H1, H2, H3)
   quality_metrics:
     ragas: # Out-of-the-box RAGAS metrics
@@ -41,6 +50,17 @@ evaluation:
     - tool_selection_accuracy # Did the agent pick the right tool?
     - correction_rate # H2: How often did reviewer catch errors? (Sys 4)
     - number_of_steps # Complexity indicator per query
+
+  # 4. Reasoning Quality Metrics (LLM-as-a-Judge, two-tier)
+  # Judge model/temperature: see top-level `evaluation.judge` above.
+  reasoning_metrics:
+    core_dimensions:       # Tier 1: applied to S1-S4
+      - logical_soundness
+      - synthesis_quality
+      - evidence_faithfulness
+    agentic_dimensions:    # Tier 2: applied to S2-S4 only
+      - tool_selection
+      - error_recovery
 
 companies:
   - ticker: AAPL

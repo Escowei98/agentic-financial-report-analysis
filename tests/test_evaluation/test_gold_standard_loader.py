@@ -2,7 +2,6 @@
 Unit tests for the gold standard loader.
 """
 
-import tempfile
 from pathlib import Path
 
 import pytest

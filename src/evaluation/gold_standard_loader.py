@@ -66,6 +66,7 @@ class GoldStandardItem:
     difficulty: str = "medium"
     math_type: str = ""
     hypothesis_link: list[str] = field(default_factory=list)
+    expected_tools: list[str] = field(default_factory=list)
 
 
 def _detect_schema_version(header: list[str]) -> str:
@@ -95,9 +96,9 @@ def _parse_v2_row(row: dict[str, str]) -> GoldStandardItem | None:
     fa_type = V2_TYPE_TO_FA_TYPE.get(v2_type, "")
     doc_refs = row.get("Doc(s)", "").strip()
     question = row.get("Query", "").strip()
-    ground_truth = row.get("GT-Wert", "").strip()
-    source_section = row.get("Source", "").strip()
-    rationale = row.get("Rationale", "").strip()
+    ground_truth = (row.get("GT-Wert (manuell)") or row.get("GT-Wert", "")).strip()
+    source_section = (row.get("Source (manuell)") or row.get("Source", "")).strip()
+    rationale = (row.get("Rationale (H)") or row.get("Rationale", "")).strip()
     entity_form_raw = row.get("entity_form", "").strip()
 
     return GoldStandardItem(
@@ -133,6 +134,13 @@ def _parse_v3_row(row: dict[str, str]) -> GoldStandardItem | None:
     hypothesis_link_str = row.get("hypothesis_link", "").strip()
     hypothesis_link = [h.strip() for h in hypothesis_link_str.split("|") if h.strip()]
 
+    expected_tools_str = row.get("expected_tools", "").strip()
+    # Support both pipe-delimited and comma-delimited tool lists
+    if "|" in expected_tools_str:
+        expected_tools = [t.strip() for t in expected_tools_str.split("|") if t.strip()]
+    else:
+        expected_tools = [t.strip() for t in expected_tools_str.split(",") if t.strip()]
+
     expected_answerable_raw = row.get("expected_answerable", "true").strip().lower()
     expected_answerable = expected_answerable_raw == "true"
 
@@ -157,6 +165,7 @@ def _parse_v3_row(row: dict[str, str]) -> GoldStandardItem | None:
         difficulty=row.get("difficulty", "medium").strip() or "medium",
         math_type=row.get("math_type", "").strip(),
         hypothesis_link=hypothesis_link,
+        expected_tools=expected_tools,
     )
 
 

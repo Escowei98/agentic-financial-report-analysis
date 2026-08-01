@@ -12,7 +12,9 @@ Run `gcloud auth application-default login` before first use.
 import logging
 
 from langchain_core.embeddings import Embeddings
+from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_google_vertexai import ChatVertexAI, VertexAIEmbeddings
+from langchain_openai import ChatOpenAI
 
 from src.common.config import load_config
 
@@ -84,6 +86,42 @@ def get_llm(system_name: str | None = None, **kwargs) -> ChatVertexAI:
         project,
         location,
     )
+    return llm
+
+
+def get_judge_llm(**kwargs) -> BaseChatModel:
+    """
+    Get the shared LLM-as-a-judge instance used by ALL evaluation code
+    (RAGAS, custom metrics, reasoning evaluator).
+
+    Deliberately backed by a different provider (OpenAI) than the Gemini
+    models the four systems under test use for generation, to avoid
+    same-model self-preference bias in LLM-as-a-judge scoring.
+
+    Args:
+        **kwargs: Overrides for ChatOpenAI (e.g., max_output_tokens).
+
+    Returns:
+        Configured ChatOpenAI instance.
+    """
+    config = load_config()
+    judge_config = config.get("evaluation", {}).get("judge", {})
+
+    api_key = config.get("openai_api_key")
+    if not api_key:
+        raise ValueError(
+            "OPENAI_API_KEY not set. Add it to your .env file."
+        )
+
+    params = {
+        "model": judge_config.get("model", "gpt-4o-mini"),
+        "temperature": judge_config.get("temperature", 0.0),
+        "api_key": api_key,
+    }
+    params.update(kwargs)
+
+    llm = ChatOpenAI(**params)
+    logger.info("Judge LLM initialized: model=%s, temperature=%s", params["model"], params["temperature"])
     return llm
 
 

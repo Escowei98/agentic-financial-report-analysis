@@ -9,7 +9,8 @@ Evaluates RAG pipeline outputs using five RAGAS metrics:
   - Answer Correctness: How well does the answer match the ground truth
     (semantic + factual)?
 
-Uses Gemini as the LLM judge via langchain-google-genai.
+Uses OpenAI (via get_judge_llm) as the LLM judge, deliberately decoupled
+from the Gemini models used by the systems under test.
 """
 
 import logging
@@ -24,7 +25,7 @@ from ragas.metrics._context_recall import context_recall
 from ragas.metrics._faithfulness import faithfulness
 from ragas.run_config import RunConfig
 
-from src.common.llm_client import get_embeddings, get_llm
+from src.common.llm_client import get_embeddings, get_judge_llm
 from src.evaluation.gold_standard_loader import GoldStandardItem
 
 logger = logging.getLogger(__name__)
@@ -127,11 +128,9 @@ def evaluate_run(
 
     logger.info("Running RAGAS evaluation on %d samples...", len(dataset))
 
-    # Use cheaper Gemini 2.0 Flash as LLM judge (saves ~80% API costs vs 3.0 Preview)
-    llm = get_llm(
-        model_name="gemini-2.0-flash",
-        max_output_tokens=8192
-    )
+    # Judge LLM is deliberately a different provider than the systems
+    # under test (see src.common.llm_client.get_judge_llm)
+    llm = get_judge_llm(max_tokens=8192)
     embeddings = get_embeddings()
 
     # Increase timeout and lower concurrency to prevent Vertex AI Timeouts
