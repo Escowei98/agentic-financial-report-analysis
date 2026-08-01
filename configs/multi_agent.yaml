@@ -1,0 +1,19 @@
+# System 4: Multi-Agent Long Context
+# Supervisor + Parametrized Specialists + Synthesizer topology.
+# Shares knowledge tools with S2/S3; differs in context routing.
+
+supervisor:
+  max_delegate_calls: 5     # Max specialist invocations per query
+  recursion_limit: 12       # > 2 * max_delegate_calls
+
+specialist:
+  max_iterations: 5         # Parity with S3 agent config
+  recursion_limit: 12       # Parity with S3
+  timeout_seconds: 120      # Per-specialist timeout
+
+synthesizer:
+  max_iterations: 3         # Synthesis rarely needs many iterations
+  recursion_limit: 8
+
+reflection:
+  enabled: true             # Symmetry with S2/S3; toggle for ablation
