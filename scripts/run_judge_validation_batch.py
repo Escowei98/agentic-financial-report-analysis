@@ -7,6 +7,7 @@ the pre-judge-swap Gemini-judged runs) to avoid mixing judge versions.
 See docs/decisions/EVAL_DECISION_LOG.md [2026-08-01] for why this sample
 exists and how it will be used (human-validation blind rating).
 """
+import argparse
 import logging
 from pathlib import Path
 
@@ -25,17 +26,33 @@ logger = logging.getLogger(__name__)
 # FA-1, FA-2, FA-3, FA-4, FA-Refusal), reused for cost/comparability continuity.
 PRIMARY_SAMPLE_IDS = [85, 16, 21, 26, 45, 106, 59, 147, 124, 76]
 
+# Disjoint reserve sample (same stratification, seed=42), reserved in
+# EVAL_DECISION_LOG.md [2026-08-01] specifically for re-validating a judge
+# prompt/logic fix WITHOUT reusing the items that motivated the fix.
+RESERVE_SAMPLE_IDS = [18, 20, 24, 44, 52, 74, 91, 119, 137, 144]
+
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--reserve", action="store_true",
+        help="Use the disjoint reserve sample instead of the primary sample "
+             "(for post-fix re-validation, see EVAL_DECISION_LOG.md).",
+    )
+    args = parser.parse_args()
+
+    sample_ids = RESERVE_SAMPLE_IDS if args.reserve else PRIMARY_SAMPLE_IDS
+    out_subdir = "raw_eval_reserve" if args.reserve else "raw_eval"
+
     project_root = Path(__file__).resolve().parent.parent
-    gs_path = project_root / "data" / "gold_standard" / "gold_standard_v4_en.csv"
+    gs_path = project_root / "data" / "gold_standard" / "gold_standard_v3_en.csv"
     filings = download_all_filings()
 
     all_gs = load_gold_standard(gs_path)
     id_to_gs = {g.id: g for g in all_gs}
-    sample_gs = [id_to_gs[i] for i in PRIMARY_SAMPLE_IDS if i in id_to_gs]
-    if len(sample_gs) != len(PRIMARY_SAMPLE_IDS):
-        missing = set(PRIMARY_SAMPLE_IDS) - {g.id for g in sample_gs}
+    sample_gs = [id_to_gs[i] for i in sample_ids if i in id_to_gs]
+    if len(sample_gs) != len(sample_ids):
+        missing = set(sample_ids) - {g.id for g in sample_gs}
         raise ValueError(f"Gold standard IDs not found: {missing}")
 
     logger.info("Initializing pipelines...")
@@ -49,7 +66,7 @@ def main():
     s3.build(filings)
     s4.build(filings)
 
-    out_dir = project_root / "data" / "results" / "judge_validation" / "raw_eval"
+    out_dir = project_root / "data" / "results" / "judge_validation" / out_subdir
     out_dir.mkdir(parents=True, exist_ok=True)
 
     systems = [

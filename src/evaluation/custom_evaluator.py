@@ -209,7 +209,8 @@ Rules:
 2. If the Ground Truth mentions 3 companies, the System Answer must mention all 3.
 3. If the System Answer misses any crucial part of the Ground Truth, it is incomplete.
 4. Numerical variance: Accept answers that represent the same underlying data but differ slightly due to rounding or independent calculation (e.g., accepting 2.08 or 2.1 for a Ground Truth of 2.0). Do NOT penalize these minor recalculation differences.
-5. Score 1.0 if completely present, 0.5 if partially present, 0.0 if entirely missing.
+5. Thoroughness is not a defect. If the System Answer provides additional supporting detail beyond the Ground Truth's phrasing (e.g., a year-by-year breakdown when the Ground Truth is a one-line trend statement like "Slightly rising"), and the Ground Truth's core claim is clearly and correctly stated among that detail (even if implicit in the numbers shown), this counts as completely present. Only penalize for MISSING information, never for additional correct information.
+6. Score 1.0 if completely present, 0.5 if partially present, 0.0 if entirely missing.
 
 Output ONLY a JSON object:
 {{

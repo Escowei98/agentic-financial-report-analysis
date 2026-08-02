@@ -14,7 +14,7 @@ Inputs:
 Output:
     data/gold_standard/gold_standard_v3.csv
         Semicolon-delimited, UTF-8, 14-column schema.
-        See data/gold_standard/gold_standard_v3_README.md for column spec.
+        See data/gold_standard/gold_standard_README.md for column spec.
 
 Migration is deterministic: every v2 entry maps to exactly one v3 entry via
 the rules in this file. The 73 new entries are authored inline (FA-1 +10,
@@ -73,7 +73,7 @@ V2_TYPE_TO_FA_TYPE = {
 }
 
 # Map freetext "Source" values from v2 to canonical section IDs (pipe-separated).
-# See data/gold_standard/gold_standard_v3_README.md "Section ID Reference".
+# See data/gold_standard/gold_standard_README.md "Section ID Reference".
 SOURCE_SECTION_MAP: dict[str, str] = {
     "Item 7": "item_7",
     "Item 8": "item_8",
@@ -505,7 +505,8 @@ INGEST_FIX_OVERRIDES: dict[str, dict[str, str]] = {
     # Total liabilities 243,686 / Total stockholders' equity 268,477 = 90.77%.
     "Wie hoch war die Debt/Equity Ratio von Microsoft in FY2024?": {
         "gt_value": "90.8%",
-        "note": "corrected 2026-07-25 (was 76.3%; source MSFT 10-K FY2024 Item 8 Balance Sheet: 243,686 / 268,477 = 90.77%)",
+        "query": "Wie hoch war die Debt/Equity Ratio (Gesamtverbindlichkeiten / Gesamtes Eigenkapital) von Microsoft in FY2024?",
+        "note": "corrected 2026-07-25 (was 76.3%; source MSFT 10-K FY2024 Item 8 Balance Sheet: 243,686 / 268,477 = 90.77%); query reworded 2026-08-01 to state the Debt/Equity formula explicitly (Answer Format Convention)",
     },
     # id 46: MSFT Net Income growth FY2022 -> FY2024. v2 value 23.6% does not
     # match the recomputed value from the Cash Flow Statements
@@ -523,11 +524,79 @@ INGEST_FIX_OVERRIDES: dict[str, dict[str, str]] = {
         "gt_value": "GOOGL (38.5% < MSFT 90.8%)",
         "note": "corrected 2026-07-25 (was 'GOOGL (44.5% < MSFT 76.3%)'; MSFT D/E = 243,686/268,477 = 90.8%, GOOGL D/E = 125,172/325,084 = 38.5%; source FY2024 Item 8 Balance Sheets; winner unchanged)",
     },
+    # id 18: GOOGL Debt/Equity FY2024, standalone version of the id-66
+    # comparison above. Never synced when id 66 was corrected on 2026-07-25 --
+    # same underlying figure, same convention (Total Liabilities / Total
+    # Equity), found stale during human judge-validation (R011/R030,
+    # 2026-08-01). GOOGL_2024 (10K_2025-02-05) Total liabilities 125,172 /
+    # Total stockholders' equity 325,084 = 38.50%.
+    "Wie hoch war die Debt/Equity Ratio von Alphabet in FY2024?": {
+        "gt_value": "38.5%",
+        "query": "Wie hoch war die Debt/Equity Ratio (Gesamtverbindlichkeiten / Gesamtes Eigenkapital) von Alphabet in FY2024?",
+        "note": "corrected 2026-08-01 (was 44.5%, never synced with the id-66 correction on 2026-07-25; GOOGL D/E = 125,172/325,084 = 38.5%; source GOOGL 10-K FY2024 Item 8 Balance Sheet); query reworded 2026-08-01 to state the Debt/Equity formula explicitly (Answer Format Convention)",
+    },
+    # ids 3/13: AAPL/AMZN Debt-to-Equity FY2024. gt_value already correct
+    # (verified against the same Total Liabilities / Total Equity
+    # convention as ids 8/18/66), only the query is reworded here for
+    # consistency -- same Answer Format Convention rollout, 2026-08-01.
+    "Wie hoch war die Debt-to-Equity Ratio von Apple am Ende von FY2024?": {
+        "query": "Wie hoch war die Debt-to-Equity Ratio (Gesamtverbindlichkeiten / Gesamtes Eigenkapital) von Apple am Ende von FY2024?",
+        "note": "query reworded 2026-08-01 to state the Debt/Equity formula explicitly (Answer Format Convention); gt_value unchanged (540.9%, already verified)",
+    },
+    "Wie hoch war die Debt-to-Equity Ratio von AMZN in FY2024?": {
+        "query": "Wie hoch war die Debt-to-Equity Ratio (Gesamtverbindlichkeiten / Gesamtes Eigenkapital) von AMZN in FY2024?",
+        "note": "query reworded 2026-08-01 to state the Debt/Equity formula explicitly (Answer Format Convention); gt_value unchanged (118.5%, already verified)",
+    },
+    # ids 44/49/54: trend_qualitative rewording. Human judge-validation
+    # (R004/R023, 2026-08-01, see EVAL_DECISION_LOG.md) found that a
+    # thorough, correct year-by-year answer was scored as a mismatch
+    # against a terse one-line GT ("Slightly rising"). Reworded to ask for
+    # the overall trend explicitly while tolerating supporting detail, per
+    # the Answer Format Convention's trend-question rule. gt_value strings
+    # are unchanged -- they already state the overall direction correctly.
+    "Wie entwickelte sich die Operating Margin von Apple über die Jahre FY2022, FY2023 und FY2024 (steigend oder fallend)?": {
+        "query": "Was war der Gesamttrend der Operating Margin von Apple von FY2022 bis FY2024 — steigend, fallend, oder in etwa gleichbleibend? Eine Jahr-für-Jahr-Aufschlüsselung kann als unterstützender Beleg angegeben werden, aber die Gesamtrichtung muss explizit genannt werden.",
+        "note": "query reworded 2026-08-01 (Answer Format Convention, trend-question rule); gt_value unchanged ('Leicht steigend')",
+    },
+    "Wie entwickelten sich die Capital Expenditures (CapEx) von Microsoft über FY2022, FY2023 und FY2024 (steigend oder fallend)?": {
+        "query": "Was war der Gesamttrend der Capital Expenditures (CapEx) von Microsoft von FY2022 bis FY2024 — steigend, fallend, oder in etwa gleichbleibend? Eine Jahr-für-Jahr-Aufschlüsselung kann als unterstützender Beleg angegeben werden, aber die Gesamtrichtung muss explizit genannt werden.",
+        "note": "query reworded 2026-08-01 (Answer Format Convention, trend-question rule); gt_value unchanged ('Stark steigend')",
+    },
+    "Wie entwickelte sich die Operating Margin des AWS-Segments von Amazon über FY2022, FY2023 und FY2024?": {
+        "query": "Was war der Gesamttrend der Operating Margin des AWS-Segments von Amazon von FY2022 bis FY2024 — steigend, fallend, oder gemischt? Eine Jahr-für-Jahr-Aufschlüsselung kann als unterstützender Beleg angegeben werden, aber die Gesamtrichtung muss explizit genannt werden.",
+        "note": "query reworded 2026-08-01 (Answer Format Convention, trend-question rule; 'gemischt' statt 'gleichbleibend' da GT nicht monoton ist); gt_value unchanged ('Fallend dann steigend')",
+    },
+    # id 24: AAPL Operating Margin FY2023. v2 value 30.8% does not match the
+    # 10-K source. AAPL_2023 (10K_2023-11-03) MD&A, FY2023 column:
+    # Operating income $114,301M / Total net sales $383,285M = 29.82%.
+    # Cross-confirmed independently by two different system answers to two
+    # different questions both citing 29.82% (id 24 direct, and id 44's
+    # trend breakdown). Found during human judge-validation (R023, reserve
+    # sample re-run, 2026-08-01).
+    "Wie hoch war die Operating Margin von AAPL in FY2023?": {
+        "gt_value": "29.8%",
+        "note": "corrected 2026-08-01 (was 30.8%; AAPL FY2023 Operating income 114,301 / Total net sales 383,285 = 29.82%; source AAPL 10-K FY2023 MD&A/Item 8 Income Statement)",
+    },
+    # id 74: highest Net Income among the 4 companies in FY2024. GOOGL_2024
+    # (10K_2025-02-05) Consolidated Statements of Income, 3-year column:
+    # Net income $59,972 (FY2022) / $73,795 (FY2023) / $100,118 (FY2024).
+    # $100.1bn > AAPL's $93.7bn -- GOOGL is the actual winner, not AAPL.
+    # Found during human judge-validation (R035, 2026-08-01).
+    "Welches der 4 Unternehmen (Apple, Microsoft, Amazon, Alphabet) hatte das höchste Net Income in FY2024?": {
+        "gt_value": "GOOGL ($100.1 Mrd)",
+        "note": "corrected 2026-08-01 (was 'AAPL ($93.7 billion)'; GOOGL FY2024 Net income = $100,118M per 10-K Consolidated Statements of Income, exceeds AAPL's $93,736M; source GOOGL 10-K FY2024 Item 8 Income Statement)",
+    },
 }
 
 
 def apply_post_migration_overrides(entries: list[V3Entry]) -> int:
     """Apply INGEST_FIX_OVERRIDES to the migrated entries in-place.
+
+    Each override may set "gt_value" (re-infers gt_unit) and/or "query"
+    (rewording, e.g. to add a disambiguating parenthetical per the Answer
+    Format Convention in gold_standard_README.md). The lookup key is
+    always the entry's ORIGINAL query text, even when the override also
+    rewords it -- rewording only takes effect after the lookup.
 
     Returns the number of entries that were touched. Raises if an override
     key does not match any entry (guards against typos or v2 rewordings).
@@ -537,8 +606,11 @@ def apply_post_migration_overrides(entries: list[V3Entry]) -> int:
         override = INGEST_FIX_OVERRIDES.get(entry.query)
         if override is None:
             continue
-        entry.gt_value = override["gt_value"]
-        entry.gt_unit = infer_gt_unit(entry.gt_value)
+        if "gt_value" in override:
+            entry.gt_value = override["gt_value"]
+            entry.gt_unit = infer_gt_unit(entry.gt_value)
+        if "query" in override:
+            entry.query = override["query"]
         applied += 1
 
     if applied != len(INGEST_FIX_OVERRIDES):
@@ -558,7 +630,7 @@ def apply_post_migration_overrides(entries: list[V3Entry]) -> int:
 #
 #  GROUND TRUTH IS DRAFT — USER must verify each entry against the SEC filing
 #  before the v3 set is declared frozen. See data/gold_standard/
-#  gold_standard_v3_README.md "Verification Workflow".
+#  gold_standard_README.md "Verification Workflow".
 # ---------------------------------------------------------------------------
 
 
@@ -692,7 +764,10 @@ NEW_FA2_ENTRIES: list[V3Entry] = [
     V3Entry(
         fa_type="FA-2", subtype="ratio_compute",
         doc_ids="GOOGL_2024",
-        query="Wie hoch war die R&D-Intensität von Alphabet in FY2024?",
+        # Reworded 2026-08-01 to match the self-defining pattern already
+        # used by ids 88/89 (same metric, AAPL/MSFT) -- Answer Format
+        # Convention, found inconsistent during human judge-validation.
+        query="Wie hoch war die R&D-Intensität (R&D-Aufwand als Prozent des Umsatzes) von Alphabet in FY2024?",
         gt_value="14.1%", gt_unit="percent",
         source_sections="item_7|item_8_income_stmt",
         difficulty="medium", entity_form="name",
@@ -997,7 +1072,13 @@ NEW_FA4_ENTRIES: list[V3Entry] = [
         fa_type="FA-4", subtype="cross_firm_pairwise",
         doc_ids="AAPL_2024|GOOGL_2024",
         query="Wer hatte das höhere Net Income in FY2024, Apple oder Alphabet?",
-        gt_value="AAPL ($93.7 Mrd > GOOGL $89.6 Mrd)", gt_unit="USD_billion",
+        # Corrected 2026-08-01 (was "AAPL ($93.7 Mrd > GOOGL $89.6 Mrd)"):
+        # GOOGL FY2024 Net income = $100,118M per 10-K Consolidated
+        # Statements of Income (source GOOGL_2024 10K_2025-02-05), exceeds
+        # AAPL's $93,736M -- winner flips to GOOGL. Same underlying figure
+        # as the id-74 max_min correction; found during human
+        # judge-validation (R035).
+        gt_value="GOOGL ($100.1 Mrd > AAPL $93.7 Mrd)", gt_unit="USD_billion",
         source_sections="item_8_income_stmt",
         difficulty="easy", entity_form="name",
         hypothesis_link="H1|H3",
@@ -1346,7 +1427,7 @@ def main() -> None:
     print(
         "USER ACTION REQUIRED: Verify the 73 new entries (id 78-150) against "
         "the SEC filings before declaring v3 frozen. See "
-        "data/gold_standard/gold_standard_v3_README.md \"Verification Workflow\"."
+        "data/gold_standard/gold_standard_README.md \"Verification Workflow\"."
     )
 
 

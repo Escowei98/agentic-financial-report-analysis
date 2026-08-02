@@ -348,6 +348,13 @@ explaining your assessment, and THEN assign a score from 1 to 5.
 
 ## Rubric
 
+Note on thoroughness: a step that provides supporting evidence a careful \
+analyst would reasonably include (e.g., showing year-by-year figures before \
+stating an overall multi-year trend) is NOT "unnecessary" or "redundant" \
+under Logical Soundness, and extra correct detail is NOT a synthesis defect \
+under Synthesis Quality. Only penalize steps that are irrelevant, \
+contradictory, or that do not support the final answer.
+
 ### 1. Logical Soundness (logische_stringenz)
 Do the reasoning steps build logically on each other? Is the argumentation \
 chain coherent and well-sequenced?

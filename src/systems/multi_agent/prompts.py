@@ -10,6 +10,7 @@ from __future__ import annotations
 import logging
 from typing import Sequence
 
+from src.common.answer_format_convention import ANSWER_FORMAT_CONVENTION
 from src.common.ingestion import ProcessedFiling
 from src.systems.long_context.prompt import _fiscal_year_from_metadata
 
@@ -74,6 +75,7 @@ Your Scope: Tickers: {tickers} | Sections: {sections}
 - For any calculation, use the calculate tool. Never compute mentally.
 - Keep your answer focused on the sub-question. The supervisor relies on
   your exact extraction.
+- """ + ANSWER_FORMAT_CONVENTION + """
 
 ## Tools
 1. **calculate(expression)** — Safe arithmetic evaluator. ALWAYS use it
@@ -113,7 +115,7 @@ their findings:
 - Do NOT invent data beyond what the specialists provided.
 - If the specialists could not find the answer, state that the information
   is not available in the given filings.
-"""
+- """ + ANSWER_FORMAT_CONVENTION + "\n"
 
 
 # ---------------------------------------------------------------------------

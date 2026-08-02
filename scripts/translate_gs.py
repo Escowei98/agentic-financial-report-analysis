@@ -43,7 +43,7 @@ Output ONLY a JSON object with the keys "query", "gt_value", "rationale":
 
 def main():
     in_csv = Path("data/gold_standard/gold_standard_v3.csv")
-    out_csv = Path("data/gold_standard/gold_standard_v4_en.csv")
+    out_csv = Path("data/gold_standard/gold_standard_v3_en.csv")
 
     with open(in_csv, "r", encoding="utf-8") as f:
         reader = csv.DictReader(f, delimiter=";")

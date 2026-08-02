@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 def main():
     # 1. Load data
     PROJECT_ROOT = Path(__file__).resolve().parent.parent
-    gs_path = PROJECT_ROOT / "data" / "gold_standard" / "gold_standard_v4_en.csv"
+    gs_path = PROJECT_ROOT / "data" / "gold_standard" / "gold_standard_v3_en.csv"
     filings = download_all_filings()
 
     # 2. Filter Gold Standard to the 10 mini-eval queries

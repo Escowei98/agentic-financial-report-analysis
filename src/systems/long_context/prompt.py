@@ -17,6 +17,7 @@ from __future__ import annotations
 import logging
 from typing import Sequence
 
+from src.common.answer_format_convention import ANSWER_FORMAT_CONVENTION
 from src.common.ingestion import ProcessedFiling
 
 logger = logging.getLogger(__name__)
@@ -98,7 +99,7 @@ OUTPUT_RULES = """\
 - If the data is not in the inlined filings, say so explicitly. Do NOT
   invent or extrapolate.
 - For any calculation, use the calculate tool. Never compute mentally.
-"""
+- """ + ANSWER_FORMAT_CONVENTION + "\n"
 
 
 # ---------------------------------------------------------------------------
