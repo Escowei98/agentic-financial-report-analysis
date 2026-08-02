@@ -14,6 +14,7 @@ from typing import Sequence
 from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate
 
+from src.common.answer_format_convention import ANSWER_FORMAT_CONVENTION
 from src.common.config import load_config
 from src.common.ingestion import ProcessedFiling
 from src.common.llm_client import get_embeddings, get_llm
@@ -30,8 +31,11 @@ RAG_PROMPT = ChatPromptTemplate.from_messages([
         "based ONLY on the provided context from SEC 10-K filings. "
         "If the context does not contain the answer, say so explicitly. "
         "Be precise with numbers — include exact figures from the filings. "
-        "Always cite the source section when possible. "
-        "IMPORTANT: ALWAYS reply in English. Use standard English number formatting (e.g. 1,000.50)."
+        "Each context chunk below is prefixed with its source in "
+        "[TICKER, FYYEAR, SECTION] form. Always cite the source using "
+        "\"({{TICKER}}, FY{{YEAR}}, {{SECTION_NAME}})\" in your answer. "
+        "IMPORTANT: ALWAYS reply in English. Use standard English number formatting (e.g. 1,000.50). "
+        + ANSWER_FORMAT_CONVENTION
     ),
     (
         "human",
@@ -214,9 +218,21 @@ class MonolithRAGPipeline:
             reranker_enabled=reranker_config.get("enabled", True),
         )
 
-        # Step 2: Build context from retrieved documents
+        # Step 2: Build context from retrieved documents.
+        # `contexts` (returned to the caller for RAGAS) stays raw page_content;
+        # the prompt gets a metadata-prefixed version so the LLM has grounded
+        # ticker/year/section info to cite from. This is a deterministic
+        # formatting step on already-attached chunk metadata (see
+        # src/common/chunker.py) — it does not add tool-use or autonomous
+        # decisions, so S1 remains a fixed one-shot retrieve-then-generate
+        # pipeline.
         contexts = [doc.page_content for doc in docs]
-        context_str = "\n\n---\n\n".join(contexts)
+        labeled_contexts = [
+            f"[{doc.metadata.get('ticker', '?')}, FY{doc.metadata.get('fiscal_year', '?')}, "
+            f"{doc.metadata.get('section_name', '?')}]\n{doc.page_content}"
+            for doc in docs
+        ]
+        context_str = "\n\n---\n\n".join(labeled_contexts)
 
         # Step 3: Generate answer
         prompt = RAG_PROMPT.format_messages(

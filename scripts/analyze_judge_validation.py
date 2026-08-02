@@ -18,6 +18,7 @@ Trust thresholds (pre-registered, see decision log): pooled weighted
 kappa >= 0.60, +/-1-tolerance >= 80%, |mean signed diff| <= 0.5,
 no visible per-system bias spread > 0.5.
 """
+import argparse
 import csv
 import json
 from collections import defaultdict
@@ -27,9 +28,7 @@ from scipy.stats import spearmanr
 from sklearn.metrics import cohen_kappa_score
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-BLIND_CSV = PROJECT_ROOT / "data" / "results" / "judge_validation" / "human_review_blind.csv"
-REFERENCE_JSON = PROJECT_ROOT / "data" / "results" / "judge_validation" / "judge_scores_reference.json"
-REPORT_MD = PROJECT_ROOT / "data" / "results" / "judge_validation" / "validation_report.md"
+RESULTS_DIR = PROJECT_ROOT / "data" / "results" / "judge_validation"
 
 KAPPA_THRESHOLD = 0.60
 TOLERANCE_THRESHOLD = 0.80
@@ -46,6 +45,7 @@ DIMENSIONS = [
     ("exact_match", "exact_match_human", ("judge_custom", "exact_match"), "custom"),
     ("answer_recall", "answer_recall_human", ("judge_custom", "answer_recall"), "custom"),
     ("refusal_accuracy", "refusal_accuracy_human", ("judge_custom", "refusal_accuracy"), "custom"),
+    ("citation_accuracy", "citation_accuracy_human", ("judge_citation", "citation_accuracy"), "custom"),
 ]
 
 
@@ -158,20 +158,37 @@ def _analyze_dimension(name, pairs, scale):
 
 
 def main():
-    if not BLIND_CSV.exists():
-        raise FileNotFoundError(f"Blind review CSV not found: {BLIND_CSV}")
-    if not REFERENCE_JSON.exists():
-        raise FileNotFoundError(f"Judge reference JSON not found: {REFERENCE_JSON}")
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--reserve", action="store_true",
+        help="Analyze the reserve-sample files (human_review_blind_reserve.csv / "
+             "judge_scores_reference_reserve.json) instead of the primary sample.",
+    )
+    args = parser.parse_args()
 
-    with open(BLIND_CSV, encoding="utf-8-sig") as f:
+    suffix = "_reserve" if args.reserve else ""
+    blind_csv = RESULTS_DIR / f"human_review_blind{suffix}.csv"
+    reference_json = RESULTS_DIR / f"judge_scores_reference{suffix}.json"
+    report_md = RESULTS_DIR / f"validation_report{suffix}.md"
+
+    if not blind_csv.exists():
+        raise FileNotFoundError(f"Blind review CSV not found: {blind_csv}")
+    if not reference_json.exists():
+        raise FileNotFoundError(f"Judge reference JSON not found: {reference_json}")
+
+    with open(blind_csv, encoding="utf-8-sig") as f:
         sample = f.read(4096)
         f.seek(0)
+        # Only trust the sniffer for the delimiter -- its guessed quoting
+        # attributes (e.g. doublequote) are unreliable and can silently
+        # mis-split quoted multi-line fields (trajectory/answer) into
+        # garbage rows. Force standard, safe quoting explicitly instead.
         try:
-            dialect = csv.Sniffer().sniff(sample, delimiters=",;")
+            delimiter = csv.Sniffer().sniff(sample, delimiters=",;").delimiter
         except csv.Error:
-            dialect = csv.excel
-        rows = list(csv.DictReader(f, dialect=dialect))
-    with open(REFERENCE_JSON, encoding="utf-8") as f:
+            delimiter = ","
+        rows = list(csv.DictReader(f, delimiter=delimiter, quotechar='"', doublequote=True))
+    with open(reference_json, encoding="utf-8") as f:
         reference = json.load(f)
 
     report_lines = ["# Judge Validation Report", ""]
@@ -192,9 +209,9 @@ def main():
     report_text = "\n".join(report_lines)
     print(report_text)
 
-    with open(REPORT_MD, "w", encoding="utf-8") as f:
+    with open(report_md, "w", encoding="utf-8") as f:
         f.write(report_text)
-    print(f"\nReport written to {REPORT_MD}")
+    print(f"\nReport written to {report_md}")
 
 
 if __name__ == "__main__":

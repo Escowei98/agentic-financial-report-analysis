@@ -15,6 +15,8 @@ from typing import Any, Sequence
 from langchain_core.language_models import BaseChatModel
 from langgraph.prebuilt import create_react_agent
 
+from src.common.answer_format_convention import ANSWER_FORMAT_CONVENTION
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -61,28 +63,28 @@ Follow the same pattern when a new question matches one of these types.
 ### Example 1 — Single-company targeted question
 User: "What are the key cybersecurity risks Apple identifies in its FY2024 10-K?"
 → search_section(ticker="AAPL", fiscal_year="2024", section="Risk Factors", sub_query="cybersecurity risks and data breaches")
-→ Answer: "Apple's FY2024 10-K identifies the following cybersecurity risks (AAPL, 2024, Risk Factors): (1) ... (2) ... (3) ..."
+→ Answer: "Apple's FY2024 10-K identifies the following cybersecurity risks (AAPL, FY2024, Risk Factors): (1) ... (2) ... (3) ..."
 
 ### Example 2 — Cross-company comparison with math
 User: "What is the difference in total revenue between AAPL and MSFT for FY2024?"
 → search_section(ticker="AAPL", fiscal_year="2024", section="Financial Statements", sub_query="total net sales fiscal 2024")
 → search_section(ticker="MSFT", fiscal_year="2024", section="Financial Statements", sub_query="total revenue fiscal 2024")
 → calculate(expression="391035 - 245122")
-→ Answer: "AAPL FY2024 total net sales were $391,035M (AAPL, 2024, Financial Statements); MSFT FY2024 total revenue was $245,122M (MSFT, 2024, Financial Statements). Difference: $145,913M (~$145.9B)."
+→ Answer: "AAPL FY2024 total net sales were $391,035M (AAPL, FY2024, Financial Statements); MSFT FY2024 total revenue was $245,122M (MSFT, FY2024, Financial Statements). Difference: $145,913M (~$145.9B)."
 
 ### Example 3 — Exploratory / cross-document question
 User: "Which companies in the knowledge base discuss AI regulation as a risk factor?"
 → retrieve_chunks(query="AI regulation as a risk factor")
-→ Answer: "Based on the retrieved chunks, AAPL (FY2024, Risk Factors) and MSFT (FY2024, Risk Factors) both discuss AI regulation as an emerging risk. Specifically: ..."
+→ Answer: "Based on the retrieved chunks, AAPL and MSFT both discuss AI regulation as an emerging risk (AAPL, FY2024, Risk Factors); (MSFT, FY2024, Risk Factors). Specifically: ..."
 
 ## Output Rules
 
 - **Language & Numbers:** ALWAYS reply in English. Use standard English number formatting (e.g. 1,000.50). NEVER use German number formatting.
 - Be precise with numbers — include exact figures from the filings.
-- Always cite the source (company, fiscal year, section) in your answer.
+- Always cite the source using "({TICKER}, FY{YEAR}, {SECTION_NAME})".
 - If the data doesn't contain the answer, say so explicitly.
 - Do NOT hallucinate information not found in the retrieved data.
-"""
+- """ + ANSWER_FORMAT_CONVENTION + "\n"
 
 
 # ---------------------------------------------------------------------------

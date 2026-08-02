@@ -13,6 +13,7 @@ Produces two files under data/results/judge_validation/:
 See docs/decisions/EVAL_DECISION_LOG.md [2026-08-01] for the full protocol
 (metric scope, blind protocol, trust thresholds, remediation plan).
 """
+import argparse
 import csv
 import glob
 import json
@@ -44,6 +45,7 @@ BLIND_FIELDS = [
     "exact_match_human",
     "answer_recall_human",
     "refusal_accuracy_human",
+    "citation_accuracy_human",
     "notes",
 ]
 
@@ -60,9 +62,19 @@ def _anonymize_trajectory(trajectory: str) -> str:
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--reserve", action="store_true",
+        help="Build from the reserve-sample raw eval JSONs instead of the "
+             "primary sample; writes to separate *_reserve output files.",
+    )
+    args = parser.parse_args()
+
     project_root = Path(__file__).resolve().parent.parent
-    raw_dir = project_root / "data" / "results" / "judge_validation" / "raw_eval"
+    raw_subdir = "raw_eval_reserve" if args.reserve else "raw_eval"
+    raw_dir = project_root / "data" / "results" / "judge_validation" / raw_subdir
     out_dir = project_root / "data" / "results" / "judge_validation"
+    suffix = "_reserve" if args.reserve else ""
 
     # Fixed, reproducible label assignment (kept only in the hidden reference file).
     labels = ["A", "B", "C", "D"]
@@ -91,6 +103,7 @@ def main():
             core = item["reasoning_metrics"]["core"]
             agentic = item["reasoning_metrics"].get("agentic")
             custom = item["custom_metrics"]
+            citation = item.get("citation_metrics")
 
             blind_rows.append({
                 "review_id": review_id,
@@ -108,6 +121,7 @@ def main():
                 "exact_match_human": "" if expected_answerable else "N/A",
                 "answer_recall_human": "" if expected_answerable else "N/A",
                 "refusal_accuracy_human": "" if not expected_answerable else "N/A",
+                "citation_accuracy_human": "" if expected_answerable else "N/A",
                 "notes": "",
             })
 
@@ -120,19 +134,20 @@ def main():
                 "judge_core": core,
                 "judge_agentic": agentic,
                 "judge_custom": custom,
+                "judge_citation": citation,
             }
 
     rng_shuffle = random.Random(SHUFFLE_SEED)
     rng_shuffle.shuffle(blind_rows)
 
     out_dir.mkdir(parents=True, exist_ok=True)
-    blind_path = out_dir / "human_review_blind.csv"
+    blind_path = out_dir / f"human_review_blind{suffix}.csv"
     with open(blind_path, "w", encoding="utf-8", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=BLIND_FIELDS)
         writer.writeheader()
         writer.writerows(blind_rows)
 
-    reference_path = out_dir / "judge_scores_reference.json"
+    reference_path = out_dir / f"judge_scores_reference{suffix}.json"
     with open(reference_path, "w", encoding="utf-8") as f:
         json.dump(reference, f, indent=2)
 

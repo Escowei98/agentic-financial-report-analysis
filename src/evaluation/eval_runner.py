@@ -16,6 +16,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+from src.evaluation.citation_evaluator import evaluate_citation_accuracy
 from src.evaluation.custom_evaluator import evaluate_custom_metrics
 from src.evaluation.gold_standard_loader import GoldStandardItem
 from src.evaluation.process_evaluator import (
@@ -108,6 +109,7 @@ def run_full_evaluation(
         ans = valid_answers[i]
 
         custom_res = evaluate_custom_metrics(item, ans)
+        citation_res = evaluate_citation_accuracy(item, ans)
 
         # Determine actual tools called
         actual_tools = []
@@ -132,6 +134,7 @@ def run_full_evaluation(
             "answer": ans,
             "trajectory": format_trajectory(res, system_name),
             "custom_metrics": custom_res.to_dict(),
+            "citation_metrics": citation_res.to_dict(),
             "reasoning_metrics": reasoning_scores[i].to_dict(),
             "process_metrics": process_res.to_dict(),
         }
@@ -163,12 +166,26 @@ def run_full_evaluation(
         threshold=0.8
     )
 
+    # Citation accuracy is only meaningful for items that actually have a
+    # source to cite (expected_answerable=True) — FA-Refusal items are
+    # skipped by evaluate_citation_accuracy and excluded here too.
+    answerable_citation_scores = [
+        d["citation_metrics"]["citation_accuracy"]
+        for d in detailed_results
+        if d["expected_answerable"]
+    ]
+    avg_citation_accuracy = (
+        sum(answerable_citation_scores) / len(answerable_citation_scores)
+        if answerable_citation_scores else 0.0
+    )
+
     summary = {
         "system_name": system_name,
         "total_queries": len(gold_items),
         "successful_queries": len(valid_indices),
         "ragas_summary": ragas_scores.to_dict(),
         "cross_document_success_rate": round(cross_doc_success, 4),
+        "citation_accuracy": round(avg_citation_accuracy, 4),
         "cost_per_correct_answer_usd": round(cost_per_correct, 4),
         "total_cost_usd": round(total_cost_usd, 4),
     }
