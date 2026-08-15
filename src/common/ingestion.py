@@ -125,14 +125,22 @@ class ProcessedFiling:
     sections: dict[str, str] = field(default_factory=dict)
     full_text: str = ""
 
-    def to_markdown(self) -> str:
+    def to_markdown(self, *, include_identifiers: bool = True) -> str:
         """
         Convert filing to clean Markdown format.
 
         Structure:
-        - YAML-style header with key metadata
+        - YAML-style header with key metadata (optional, see include_identifiers)
         - Each 10-K section as a ## heading
         - Clean text content under each heading
+
+        Args:
+            include_identifiers: If False, omit the CIK/Filing-Date/Accession-
+                Number header block. Used by the LLM-facing prompt builders
+                (S3/S4) so that every system is exposed to the same minimal
+                set of identifiers (ticker, fiscal year, section) instead of
+                the full sidecar-style identifier set that only the persisted
+                `data/processed/*.md` file is meant to carry.
         """
         lines = []
 
@@ -140,12 +148,13 @@ class ProcessedFiling:
         m = self.metadata
         lines.append(f"# {m.company_name} — 10-K Annual Report")
         lines.append("")
-        lines.append(f"**Ticker:** {m.ticker}  ")
-        lines.append(f"**CIK:** {m.cik}  ")
-        lines.append(f"**Filing Date:** {m.filing_date}  ")
-        lines.append(f"**Fiscal Year End:** {m.fiscal_year_end}  ")
-        lines.append(f"**Accession Number:** {m.accession_number}")
-        lines.append("")
+        if include_identifiers:
+            lines.append(f"**Ticker:** {m.ticker}  ")
+            lines.append(f"**CIK:** {m.cik}  ")
+            lines.append(f"**Filing Date:** {m.filing_date}  ")
+            lines.append(f"**Fiscal Year End:** {m.fiscal_year_end}  ")
+            lines.append(f"**Accession Number:** {m.accession_number}")
+            lines.append("")
         lines.append("---")
         lines.append("")
 

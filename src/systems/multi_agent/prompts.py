@@ -142,11 +142,11 @@ def _format_single_filing_filtered(
                 included_sections.append(sec)
             elif sec == "Full Text":
                 # Special case if they want the whole thing
-                content_blocks.append(filing.to_markdown())
+                content_blocks.append(filing.to_markdown(include_identifiers=False))
                 included_sections.append("Full Text")
     else:
         # If the filing wasn't chunked by section, just include the full text
-        content_blocks.append(filing.to_markdown())
+        content_blocks.append(filing.to_markdown(include_identifiers=False))
         included_sections.append("Full Text (Unsectioned)")
 
     if not content_blocks:

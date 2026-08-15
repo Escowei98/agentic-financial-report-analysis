@@ -139,7 +139,7 @@ def _format_single_filing(filing: ProcessedFiling) -> str:
 
     header = f"### {ticker} FY{year} - {company}\n\n"
     sections_line = f"Sections: {', '.join(section_names)}\n\n"
-    body = filing.to_markdown()
+    body = filing.to_markdown(include_identifiers=False)
 
     return header + sections_line + body
 

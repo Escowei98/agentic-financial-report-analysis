@@ -20,8 +20,8 @@ pattern in custom_evaluator.py:
      (measurably noisy, see docs/decisions/EVAL_DECISION_LOG.md) fallback
      is needed at all.
   Both deterministic tiers score against the gold-standard doc_ids/
-  source_sections with set-based Precision/Recall/F1 (doc ids reuse
-  evaluate_tool_selection from process_evaluator.py; sections use a
+  source_sections with set-based Precision/Recall/F1 (doc ids reuse the
+  generic evaluate_set_overlap from process_evaluator.py; sections use a
   citation-group-aware variant, see _score_sections).
   3. LLM judge fallback: only when neither deterministic tier finds any
      company/ticker mention at all (i.e. the source is genuinely
@@ -33,7 +33,7 @@ import re
 from dataclasses import dataclass
 
 from src.common.llm_client import get_judge_llm
-from src.evaluation.process_evaluator import evaluate_tool_selection
+from src.evaluation.process_evaluator import evaluate_set_overlap
 
 logger = logging.getLogger(__name__)
 
@@ -289,19 +289,19 @@ def _score_deterministic(item, parsed: list[dict], tier: str = "structured") -> 
     parsed_section_ids = sorted({sid for ids in section_id_sets for sid in ids})
 
     # Doc ids are unambiguous 1:1 (ticker_year), so the generic set-based
-    # Precision/Recall/F1 already used for tool selection applies directly.
-    doc_res = evaluate_tool_selection(expected_doc_ids, parsed_doc_ids)
+    # Precision/Recall/F1 helper applies directly.
+    doc_res = evaluate_set_overlap(expected_doc_ids, parsed_doc_ids)
     section_precision, section_recall, section_f1 = _score_sections(
         expected_section_ids, section_id_sets
     )
 
-    citation_accuracy = (doc_res.tool_f1 + section_f1) / 2
+    citation_accuracy = (doc_res.f1 + section_f1) / 2
 
     return CitationEvalResult(
         citation_accuracy=citation_accuracy,
-        doc_precision=doc_res.tool_precision,
-        doc_recall=doc_res.tool_recall,
-        doc_f1=doc_res.tool_f1,
+        doc_precision=doc_res.precision,
+        doc_recall=doc_res.recall,
+        doc_f1=doc_res.f1,
         section_precision=section_precision,
         section_recall=section_recall,
         section_f1=section_f1,

@@ -35,6 +35,7 @@ VALID_SECTIONS = [
 def _format_section_results(
     docs: list[Document],
     ticker: str,
+    fiscal_year: str,
     section: str,
     sub_query: str | None,
 ) -> str:
@@ -49,7 +50,7 @@ def _format_section_results(
     parts = []
     for i, doc in enumerate(docs, 1):
         parts.append(
-            f"[{ticker} — {section} — Chunk {i}]\n{doc.page_content}"
+            f"[{ticker}, FY{fiscal_year}, {section} — Chunk {i}]\n{doc.page_content}"
         )
 
     ranking_hint = (
@@ -184,7 +185,7 @@ def create_search_section_tool(
             len(final_docs), len(candidates),
         )
         return _format_section_results(
-            final_docs, ticker_upper, section, effective_sub_query,
+            final_docs, ticker_upper, fy, section, effective_sub_query,
         )
 
     return search_section

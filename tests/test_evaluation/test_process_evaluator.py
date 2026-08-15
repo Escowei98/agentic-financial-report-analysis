@@ -2,50 +2,50 @@ import pytest
 
 from src.evaluation.process_evaluator import (
     calculate_cost_per_correct_answer,
-    evaluate_tool_selection,
+    evaluate_set_overlap,
 )
 
 
-def test_evaluate_tool_selection_perfect():
+def test_evaluate_set_overlap_perfect():
     expected = ["search_section", "calculate"]
     actual = ["search_section", "calculate", "search_section"]  # Duplicate is fine
-    result = evaluate_tool_selection(expected, actual)
+    result = evaluate_set_overlap(expected, actual)
 
-    assert result.tool_precision == 1.0
-    assert result.tool_recall == 1.0
-    assert result.tool_f1 == 1.0
+    assert result.precision == 1.0
+    assert result.recall == 1.0
+    assert result.f1 == 1.0
 
-def test_evaluate_tool_selection_missing():
+def test_evaluate_set_overlap_missing():
     expected = ["search_section", "calculate"]
     actual = ["search_section"]
-    result = evaluate_tool_selection(expected, actual)
+    result = evaluate_set_overlap(expected, actual)
 
     # 1 correct, 0 false pos, 1 false neg
-    assert result.tool_precision == 1.0
-    assert result.tool_recall == 0.5
-    assert result.tool_f1 == pytest.approx(0.666, 0.01)
+    assert result.precision == 1.0
+    assert result.recall == 0.5
+    assert result.f1 == pytest.approx(0.666, 0.01)
 
-def test_evaluate_tool_selection_extra():
+def test_evaluate_set_overlap_extra():
     expected = ["search_section"]
     actual = ["search_section", "calculate"]
-    result = evaluate_tool_selection(expected, actual)
+    result = evaluate_set_overlap(expected, actual)
 
     # 1 correct, 1 false pos, 0 false neg
-    assert result.tool_precision == 0.5
-    assert result.tool_recall == 1.0
-    assert result.tool_f1 == pytest.approx(0.666, 0.01)
+    assert result.precision == 0.5
+    assert result.recall == 1.0
+    assert result.f1 == pytest.approx(0.666, 0.01)
 
-def test_evaluate_tool_selection_none_expected():
+def test_evaluate_set_overlap_none_expected():
     expected = []
     actual = []
-    result = evaluate_tool_selection(expected, actual)
-    assert result.tool_precision == 1.0
-    assert result.tool_f1 == 1.0
+    result = evaluate_set_overlap(expected, actual)
+    assert result.precision == 1.0
+    assert result.f1 == 1.0
 
     actual_extra = ["search_section"]
-    result2 = evaluate_tool_selection(expected, actual_extra)
-    assert result2.tool_precision == 0.0
-    assert result2.tool_f1 == 0.0
+    result2 = evaluate_set_overlap(expected, actual_extra)
+    assert result2.precision == 0.0
+    assert result2.f1 == 0.0
 
 def test_calculate_cost_per_correct_answer():
     cost = 1.0  # $1.0 total

@@ -6,7 +6,7 @@ Orchestrates the complete evaluation pipeline for a given system:
 2. Computes RAGAS metrics.
 3. Computes Custom metrics (Exact Match, Answer Recall, Refusal).
 4. Computes Reasoning metrics (Core & Agentic).
-5. Computes Process metrics (Tool Selection & Cost).
+5. Computes efficiency/process outputs (Cost per Correct Answer, Correction Rate).
 6. Compiles a consolidated result JSON.
 """
 
@@ -19,10 +19,7 @@ from typing import Any
 from src.evaluation.citation_evaluator import evaluate_citation_accuracy
 from src.evaluation.custom_evaluator import evaluate_custom_metrics
 from src.evaluation.gold_standard_loader import GoldStandardItem
-from src.evaluation.process_evaluator import (
-    calculate_cost_per_correct_answer,
-    evaluate_tool_selection,
-)
+from src.evaluation.process_evaluator import calculate_cost_per_correct_answer
 from src.evaluation.ragas_evaluator import evaluate_run
 from src.evaluation.reasoning_evaluator import evaluate_reasoning_batch, format_trajectory
 
@@ -100,7 +97,7 @@ def run_full_evaluation(
     logger.info("Running Reasoning evaluation...")
     reasoning_scores = evaluate_reasoning_batch(valid_items, valid_results, system_name)
 
-    logger.info("Running Custom and Process evaluation...")
+    logger.info("Running Custom, Citation and Efficiency evaluation...")
     detailed_results = []
     correctness_scores = []
 
@@ -110,13 +107,6 @@ def run_full_evaluation(
 
         custom_res = evaluate_custom_metrics(item, ans)
         citation_res = evaluate_citation_accuracy(item, ans)
-
-        # Determine actual tools called
-        actual_tools = []
-        if hasattr(res, "tool_calls_log") and res.tool_calls_log:
-            actual_tools = [tc.get("tool", tc.get("name", "unknown")) for tc in res.tool_calls_log]
-
-        process_res = evaluate_tool_selection(item.expected_tools, actual_tools)
 
         # Decide which correctness score to use for cost_per_correct_answer
         # We can use RAGAS Answer Correctness if exact_match is 0.0 or not applicable.
@@ -136,7 +126,6 @@ def run_full_evaluation(
             "custom_metrics": custom_res.to_dict(),
             "citation_metrics": citation_res.to_dict(),
             "reasoning_metrics": reasoning_scores[i].to_dict(),
-            "process_metrics": process_res.to_dict(),
         }
 
         if hasattr(res, "metrics"):
@@ -145,6 +134,7 @@ def run_full_evaluation(
                 "total_tokens": res.metrics.token_usage.total_tokens,
                 "estimated_cost_usd": res.metrics.estimated_cost_usd,
                 "num_steps": res.metrics.num_steps,
+                "corrections": res.metrics.corrections,
             }
 
         detailed_results.append(query_data)
@@ -166,6 +156,16 @@ def run_full_evaluation(
         threshold=0.8
     )
 
+    # Correction rate: share of queries where the reflection/reviewer stage
+    # triggered a revision (constant 0 for System 1, which has no reflection
+    # stage; RunMetrics.corrections defaults to 0 and is never set there).
+    items_with_run_metrics = [d for d in detailed_results if "run_metrics" in d]
+    correction_rate = 0.0
+    if items_with_run_metrics:
+        correction_rate = sum(
+            d["run_metrics"]["corrections"] for d in items_with_run_metrics
+        ) / len(items_with_run_metrics)
+
     # Citation accuracy is only meaningful for items that actually have a
     # source to cite (expected_answerable=True) — FA-Refusal items are
     # skipped by evaluate_citation_accuracy and excluded here too.
@@ -186,6 +186,7 @@ def run_full_evaluation(
         "ragas_summary": ragas_scores.to_dict(),
         "cross_document_success_rate": round(cross_doc_success, 4),
         "citation_accuracy": round(avg_citation_accuracy, 4),
+        "correction_rate": round(correction_rate, 4),
         "cost_per_correct_answer_usd": round(cost_per_correct, 4),
         "total_cost_usd": round(total_cost_usd, 4),
     }
