@@ -25,6 +25,26 @@ from src.evaluation.reasoning_evaluator import evaluate_reasoning_batch, format_
 
 logger = logging.getLogger(__name__)
 
+# Systems whose `contexts` field is not "the evidence the answer was
+# grounded in" and therefore can't meaningfully support RAGAS's
+# context_precision/context_recall/faithfulness:
+#   - long_context (S3): contexts only ever contains calculate/list_filings
+#     tool outputs; the actual grounding (inlined filings) never appears
+#     there (see LongContextPipeline._parse_messages docstring).
+#   - multi_agent (S4): contexts is the specialist agents' own generated
+#     answer text (see MultiAgentPipeline.query), not primary-source text
+#     — faithfulness against it is near-tautological (synthesizer vs. its
+#     own upstream paraphrase, not vs. real evidence).
+# Both architectures inline the full filing set into an LLM prompt ahead
+# of time rather than retrieving it at query time, so there is no
+# observable retrieval step whose output RAGAS could score. Comparable
+# work (FinanceBench, Islam et al. 2023; Li et al. 2024 "RAG or
+# Long-Context LLMs?"; Lithgow-Serrano et al. 2025 FinDoc-RAG) evaluates
+# such conditions purely on final-answer metrics for the same reason —
+# see docs/decisions/EVAL_DECISION_LOG.md [2026-08-16].
+SYSTEMS_WITHOUT_MEANINGFUL_CONTEXT_METRICS = {"long_context", "multi_agent"}
+
+
 def run_full_evaluation(
     pipeline: Any,
     system_name: str,
@@ -92,7 +112,11 @@ def run_full_evaluation(
         return {"error": "All queries failed"}
 
     logger.info("Running RAGAS evaluation...")
-    ragas_scores = evaluate_run(valid_items, valid_answers, valid_contexts)
+    include_context_metrics = system_name not in SYSTEMS_WITHOUT_MEANINGFUL_CONTEXT_METRICS
+    ragas_scores = evaluate_run(
+        valid_items, valid_answers, valid_contexts,
+        include_context_metrics=include_context_metrics,
+    )
 
     logger.info("Running Reasoning evaluation...")
     reasoning_scores = evaluate_reasoning_batch(valid_items, valid_results, system_name)

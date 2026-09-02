@@ -40,40 +40,63 @@ ABLATION_METRICS = [
     answer_correctness,
 ]
 
+# The three metrics that score the `retrieved_contexts` field against the
+# answer/ground truth. Only meaningful for systems with an observable
+# retrieval step whose output is the actual evidence the answer was
+# grounded in (see eval_runner.py's include_context_metrics decision and
+# docs/decisions/EVAL_DECISION_LOG.md [2026-08-16]).
+CONTEXT_METRICS = [context_precision, context_recall, faithfulness]
+
+# Metrics that compare the final answer against the question/ground truth
+# directly and don't depend on `retrieved_contexts` at all — meaningful
+# for every system regardless of architecture.
+ANSWER_METRICS = [answer_relevancy, answer_correctness]
+
 
 @dataclass
 class EvalScores:
-    """Evaluation scores from a single evaluation run."""
+    """
+    Evaluation scores from a single evaluation run.
 
-    context_precision: float
-    context_recall: float
-    faithfulness: float
+    context_precision/context_recall/faithfulness are None when the
+    system under test has no observable retrieval step whose output can
+    stand in for "the evidence the answer was grounded in" — see
+    eval_runner.py. answer_relevancy/answer_correctness are always
+    computed since they don't depend on `retrieved_contexts`.
+    """
+
     answer_relevancy: float
     answer_correctness: float
+    context_precision: float | None = None
+    context_recall: float | None = None
+    faithfulness: float | None = None
 
     @property
     def composite_score(self) -> float:
         """
-        Equal-weighted mean across all five RAGAS metrics.
+        Equal-weighted mean across whichever RAGAS metrics were actually
+        computed (3 or 5, depending on include_context_metrics).
 
         Used as a coarse single-number summary; not a thesis-grade
-        result on its own. Hypotheses are evaluated against the
-        individual metrics plus the custom metrics from base.yaml.
+        result on its own, and NOT comparable between a 5-metric and a
+        3-metric composite — see the report's RAGAS caveat note.
+        Hypotheses are evaluated against the individual metrics plus the
+        custom metrics from base.yaml.
         """
-        return (
-            self.context_precision
-            + self.context_recall
-            + self.faithfulness
-            + self.answer_relevancy
-            + self.answer_correctness
-        ) / 5.0
+        values = [
+            v for v in (
+                self.context_precision, self.context_recall, self.faithfulness,
+                self.answer_relevancy, self.answer_correctness,
+            ) if v is not None
+        ]
+        return sum(values) / len(values) if values else 0.0
 
     def to_dict(self) -> dict:
-        """Return scores as dict."""
+        """Return scores as dict. Uncomputed context metrics serialize as null."""
         return {
-            "context_precision": round(self.context_precision, 4),
-            "context_recall": round(self.context_recall, 4),
-            "faithfulness": round(self.faithfulness, 4),
+            "context_precision": round(self.context_precision, 4) if self.context_precision is not None else None,
+            "context_recall": round(self.context_recall, 4) if self.context_recall is not None else None,
+            "faithfulness": round(self.faithfulness, 4) if self.faithfulness is not None else None,
             "answer_relevancy": round(self.answer_relevancy, 4),
             "answer_correctness": round(self.answer_correctness, 4),
             "composite_score": round(self.composite_score, 4),
@@ -95,6 +118,7 @@ def evaluate_run(
     gold_standard: list[GoldStandardItem],
     answers: list[str],
     contexts: list[list[str]],
+    include_context_metrics: bool = True,
 ) -> EvalScores:
     """
     Evaluate a RAG run using RAGAS metrics.
@@ -103,10 +127,16 @@ def evaluate_run(
         gold_standard: Gold-standard Q&A items.
         answers: Generated answers (one per gold_standard item).
         contexts: Retrieved contexts per query (list of string lists).
+        include_context_metrics: When False, skips context_precision/
+            context_recall/faithfulness entirely (not computed, not just
+            hidden) and only requests answer_relevancy/answer_correctness
+            from RAGAS. Use for systems without an observable retrieval
+            step — see eval_runner.py.
 
     Returns:
-        EvalScores with context_precision, context_recall, faithfulness,
-        answer_relevancy, answer_correctness.
+        EvalScores with answer_relevancy, answer_correctness always set;
+        context_precision, context_recall, faithfulness set only when
+        include_context_metrics=True.
     """
     if len(gold_standard) != len(answers) or len(gold_standard) != len(contexts):
         raise ValueError(
@@ -136,10 +166,12 @@ def evaluate_run(
     # Increase timeout and lower concurrency to prevent Vertex AI Timeouts
     run_config = RunConfig(timeout=300, max_workers=4)
 
-    # Run RAGAS evaluation
+    # Run RAGAS evaluation — only request the context-dependent metrics
+    # when they're actually meaningful for this system (see docstring).
+    metrics = ABLATION_METRICS if include_context_metrics else ANSWER_METRICS
     result = evaluate(
         dataset=dataset,
-        metrics=ABLATION_METRICS,
+        metrics=metrics,
         llm=llm,
         embeddings=embeddings,
         run_config=run_config,
@@ -151,19 +183,26 @@ def evaluate_run(
         return sum(valid) / len(valid) if valid else 0.0
 
     scores = EvalScores(
-        context_precision=_mean(result["context_precision"]),
-        context_recall=_mean(result["context_recall"]),
-        faithfulness=_mean(result["faithfulness"]),
         answer_relevancy=_mean(result["answer_relevancy"]),
         answer_correctness=_mean(result["answer_correctness"]),
+        context_precision=_mean(result["context_precision"]) if include_context_metrics else None,
+        context_recall=_mean(result["context_recall"]) if include_context_metrics else None,
+        faithfulness=_mean(result["faithfulness"]) if include_context_metrics else None,
     )
 
-    logger.info(
-        "RAGAS scores: precision=%.3f, recall=%.3f, faithfulness=%.3f, "
-        "ans_relevancy=%.3f, ans_correctness=%.3f → composite=%.3f",
-        scores.context_precision, scores.context_recall, scores.faithfulness,
-        scores.answer_relevancy, scores.answer_correctness, scores.composite_score,
-    )
+    if include_context_metrics:
+        logger.info(
+            "RAGAS scores: precision=%.3f, recall=%.3f, faithfulness=%.3f, "
+            "ans_relevancy=%.3f, ans_correctness=%.3f → composite=%.3f",
+            scores.context_precision, scores.context_recall, scores.faithfulness,
+            scores.answer_relevancy, scores.answer_correctness, scores.composite_score,
+        )
+    else:
+        logger.info(
+            "RAGAS scores (context metrics skipped — no observable retrieval "
+            "step): ans_relevancy=%.3f, ans_correctness=%.3f → composite=%.3f",
+            scores.answer_relevancy, scores.answer_correctness, scores.composite_score,
+        )
 
     return scores
 
