@@ -242,12 +242,28 @@ class LongContextPipeline:
             feedback_msg = generate_feedback_message(verdict)
             if feedback_msg is not None:
                 revised_messages = messages + [feedback_msg]
-                second_result = self._agent.invoke(
-                    {"messages": revised_messages},
-                    config={"recursion_limit": recursion_limit},
-                )
-                messages = second_result.get("messages", revised_messages)
-                was_revised = True
+                try:
+                    second_result = self._agent.invoke(
+                        {"messages": revised_messages},
+                        config={"recursion_limit": recursion_limit},
+                    )
+                    messages = second_result.get("messages", revised_messages)
+                    was_revised = True
+                except Exception as e:
+                    # Known upstream flakiness: Gemini 2.5's per-tool-call
+                    # "thought signature" occasionally fails to round-trip
+                    # through langchain-google-vertexai when the full
+                    # message history (incl. prior tool calls) is resent,
+                    # surfacing as InvalidArgument "must include at least
+                    # one parts field". Not reproducible deterministically
+                    # per-question, so it can't be fixed at the message-
+                    # construction level here. Fall back to the pre-revision
+                    # draft rather than losing the query outright.
+                    logger.warning(
+                        "S3 revision re-invoke failed (%s: %s); keeping "
+                        "pre-revision draft answer.",
+                        type(e).__name__, e,
+                    )
 
         elapsed = time.perf_counter() - start_time
 
