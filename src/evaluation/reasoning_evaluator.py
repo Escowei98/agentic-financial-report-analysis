@@ -474,7 +474,8 @@ def _extract_json(text: str) -> dict:
 
     # Try direct parse
     try:
-        return json.loads(cleaned)
+        parsed: dict = json.loads(cleaned)
+        return parsed
     except json.JSONDecodeError:
         pass
 
@@ -482,7 +483,8 @@ def _extract_json(text: str) -> dict:
     match = re.search(r"\{.*\}", cleaned, re.DOTALL)
     if match:
         try:
-            return json.loads(match.group())
+            parsed = json.loads(match.group())
+            return parsed
         except json.JSONDecodeError:
             pass
 
@@ -697,14 +699,12 @@ def evaluate_reasoning_batch(
                 "avg Core composite=%.2f",
                 system_name, len(valid), total, avg_core,
             )
-            agentic_valid = [r for r in valid if r.agentic is not None]
-            if agentic_valid:
-                avg_agentic = sum(
-                    r.agentic.composite for r in agentic_valid
-                ) / len(agentic_valid)
+            agentic_scores = [r.agentic.composite for r in valid if r.agentic is not None]
+            if agentic_scores:
+                avg_agentic = sum(agentic_scores) / len(agentic_scores)
                 logger.info(
                     "[%s] Avg Agentic composite=%.2f (%d items)",
-                    system_name, avg_agentic, len(agentic_valid),
+                    system_name, avg_agentic, len(agentic_scores),
                 )
 
     return eval_results

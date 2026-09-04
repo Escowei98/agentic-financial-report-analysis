@@ -16,8 +16,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Sequence
 
+from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from langchain_core.messages import HumanMessage
+from langchain_core.runnables import Runnable
+from langchain_google_vertexai import ChatVertexAI
 
 from src.common.agent import build_agent
 from src.common.config import load_config
@@ -29,7 +32,12 @@ from src.common.reflection import (
     build_reflection_chain,
     run_reflection_pass,
 )
-from src.common.retrieval import build_hybrid_retriever, build_vectorstore, load_or_build_documents
+from src.common.retrieval import (
+    HybridRetriever,
+    build_hybrid_retriever,
+    build_vectorstore,
+    load_or_build_documents,
+)
 from src.common.tools.calculate import calculate
 from src.common.tools.list_filings import create_list_filings_tool
 from src.common.utils import RunMetrics, TokenUsage, compute_filings_hash
@@ -86,12 +94,12 @@ class AgentRAGPipeline:
         self._apply_overrides(config_override or {})
 
         self._agent = None
-        self._reflection_chain = None
-        self._retriever = None
-        self._vectorstore = None
-        self._documents = None
-        self._filings = None
-        self._llm = None
+        self._reflection_chain: Runnable | None = None
+        self._retriever: HybridRetriever | None = None
+        self._vectorstore: Chroma | None = None
+        self._documents: list[Document] | None = None
+        self._filings: list[ProcessedFiling] | None = None
+        self._llm: ChatVertexAI | None = None
 
     def _apply_overrides(self, overrides: dict) -> None:
         """Apply parameter overrides (same structure as monolith for consistency)."""

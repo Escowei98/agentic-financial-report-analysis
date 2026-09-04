@@ -11,15 +11,23 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Sequence
 
+from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from langchain_core.prompts import ChatPromptTemplate
+from langchain_google_vertexai import ChatVertexAI
 
 from src.common.answer_format_convention import ANSWER_FORMAT_CONVENTION
 from src.common.config import load_config
 from src.common.ingestion import ProcessedFiling
 from src.common.llm_client import get_embeddings, get_llm
-from src.common.retrieval import build_hybrid_retriever, build_vectorstore, load_or_build_documents, retrieve
-from src.common.utils import RunMetrics, TokenUsage, compute_filings_hash
+from src.common.retrieval import (
+    HybridRetriever,
+    build_hybrid_retriever,
+    build_vectorstore,
+    load_or_build_documents,
+    retrieve,
+)
+from src.common.utils import RunMetrics, TokenUsage, compute_filings_hash, extract_text
 
 logger = logging.getLogger(__name__)
 
@@ -79,10 +87,10 @@ class MonolithRAGPipeline:
         self.config = load_config("rag_monolith")
         self._apply_overrides(config_override or {})
 
-        self._retriever = None
-        self._documents = None
-        self._vectorstore = None
-        self._llm = None
+        self._retriever: HybridRetriever | None = None
+        self._documents: list[Document] | None = None
+        self._vectorstore: Chroma | None = None
+        self._llm: ChatVertexAI | None = None
 
     def _apply_overrides(self, overrides: dict) -> None:
         """Apply parameter overrides from Optuna or manual config."""
@@ -240,7 +248,7 @@ class MonolithRAGPipeline:
             question=question,
         )
         response = self._llm.invoke(prompt)
-        answer = response.content
+        answer = extract_text(response.content)
 
         # Step 4: Collect metrics
         elapsed = time.perf_counter() - start_time

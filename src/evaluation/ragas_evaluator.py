@@ -15,9 +15,10 @@ from the Gemini models used by the systems under test.
 
 import logging
 from dataclasses import dataclass
+from typing import cast
 
 from ragas import evaluate
-from ragas.dataset_schema import EvaluationDataset, SingleTurnSample
+from ragas.dataset_schema import EvaluationDataset, EvaluationResult, MultiTurnSample, SingleTurnSample
 from ragas.metrics._answer_correctness import answer_correctness
 from ragas.metrics._answer_relevance import answer_relevancy
 from ragas.metrics._context_precision import context_precision
@@ -143,7 +144,7 @@ def evaluate_run(
         )
 
     # Build RAGAS v2 EvaluationDataset directly (bypasses buggy HF Dataset conversion)
-    samples = [
+    samples: list[SingleTurnSample | MultiTurnSample] = [
         SingleTurnSample(
             user_input=item.question,
             response=_to_str(answer),
@@ -167,13 +168,16 @@ def evaluate_run(
     # Run RAGAS evaluation — only request the context-dependent metrics
     # when they're actually meaningful for this system (see docstring).
     metrics = ABLATION_METRICS if include_context_metrics else ANSWER_METRICS
-    result = evaluate(
+    # `evaluate()` is typed to return `EvaluationResult | Executor`, but it
+    # only returns an `Executor` when called with `return_executor=True`
+    # (not done here) — this call always gets an `EvaluationResult` back.
+    result = cast(EvaluationResult, evaluate(
         dataset=dataset,
         metrics=metrics,
         llm=llm,
         embeddings=embeddings,
         run_config=run_config,
-    )
+    ))
 
     def _mean(values: list) -> float:
         """Average a list of per-sample metric scores, ignoring None/NaN."""

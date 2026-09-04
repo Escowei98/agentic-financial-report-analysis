@@ -25,6 +25,8 @@ from dataclasses import dataclass, field
 from typing import Sequence
 
 from langchain_core.messages import HumanMessage
+from langchain_core.runnables import Runnable
+from langchain_google_vertexai import ChatVertexAI
 
 from src.common.agent import build_agent
 from src.common.config import load_config
@@ -88,8 +90,8 @@ class LongContextPipeline:
         self._apply_overrides(config_override or {})
 
         self._agent = None
-        self._reflection_chain = None
-        self._llm = None
+        self._reflection_chain: Runnable | None = None
+        self._llm: ChatVertexAI | None = None
         self._filings: list[ProcessedFiling] | None = None
         self._system_prompt: str | None = None
 

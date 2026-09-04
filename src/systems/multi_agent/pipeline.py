@@ -7,10 +7,13 @@ Supervisor -> Parametrized Specialists -> Synthesizer -> Reflection.
 import logging
 import time
 from dataclasses import dataclass, field
-from typing import Sequence
+from typing import Any, Sequence
 
 from langchain_core.messages import HumanMessage
+from langchain_core.runnables import Runnable
+from langchain_google_vertexai import ChatVertexAI
 from langgraph.graph import END, START, StateGraph
+from langgraph.graph.state import CompiledStateGraph
 
 from src.common.agent import build_agent
 from src.common.config import load_config
@@ -66,13 +69,14 @@ class MultiAgentPipeline:
         self.config = load_config("multi_agent")
         self._apply_overrides(config_override or {})
 
-        self._llm = None
+        self._llm: ChatVertexAI | None = None
         self._filings: list[ProcessedFiling] = []
-        self._graph = None
-        self._reflection_chain = None
+        self._graph: CompiledStateGraph | None = None
+        self._reflection_chain: Runnable | None = None
 
         self._available_tickers: list[str] = []
         self._available_sections: list[str] = []
+        self._current_state: dict[str, Any] = {}
 
     def _apply_overrides(self, overrides: dict) -> None:
         sup_cfg = self.config.get("supervisor", {})
@@ -106,7 +110,7 @@ class MultiAgentPipeline:
 
         # Extract available tickers and sections
         tickers_set = set()
-        sections_set = set()
+        sections_set: set[str] = set()
         for f in self._filings:
             tickers_set.add(f.metadata.ticker.upper())
             if f.sections:
@@ -173,6 +177,9 @@ class MultiAgentPipeline:
 
     def _run_specialist(self, tickers: list[str], sections: list[str], sub_question: str) -> str:
         """Dynamically build and invoke a specialist agent."""
+        if self._llm is None:
+            raise RuntimeError("Pipeline not built. Call .build(filings) first.")
+
         spec_cfg = self.config.get("specialist", {})
         recursion_limit = spec_cfg.get("recursion_limit", 12)
 
@@ -225,6 +232,9 @@ class MultiAgentPipeline:
 
     def _supervisor_node_func(self, state: MultiAgentState) -> dict:
         """Executes the Supervisor ReAct agent."""
+        if self._llm is None:
+            raise RuntimeError("Pipeline not built. Call .build(filings) first.")
+
         sup_cfg = self.config.get("supervisor", {})
         recursion_limit = sup_cfg.get("recursion_limit", 12)
 
@@ -275,6 +285,9 @@ class MultiAgentPipeline:
 
     def _synthesizer_node_func(self, state: MultiAgentState) -> dict:
         """Executes the Synthesizer agent."""
+        if self._llm is None:
+            raise RuntimeError("Pipeline not built. Call .build(filings) first.")
+
         syn_cfg = self.config.get("synthesizer", {})
         recursion_limit = syn_cfg.get("recursion_limit", 8)
 
@@ -379,7 +392,7 @@ class MultiAgentPipeline:
 
         start_time = time.perf_counter()
 
-        initial_state = {
+        initial_state: MultiAgentState = {
             "messages": [HumanMessage(content=question)],
             "user_query": question,
             "supervisor_plan": "",
@@ -425,6 +438,7 @@ class MultiAgentPipeline:
         # Actually I should fix the StateGraph TypedDict in graph.py to use `add_messages` style reducer for lists,
         # OR just use operator.add
 
+        num_specialists_invoked = len(final_state.get("delegations", []))
         metrics = RunMetrics(
             query=question,
             system_name="multi_agent",
@@ -433,7 +447,7 @@ class MultiAgentPipeline:
             num_steps=len(final_state.get("tool_calls_log", [])),
             tool_calls=[tc["tool"] for tc in final_state.get("tool_calls_log", [])],
             corrections=1 if was_revised else 0,
-            num_specialists_invoked=len(final_state.get("delegations", [])),
+            num_specialists_invoked=num_specialists_invoked,
             token_breakdown={k: v.total_tokens for k, v in breakdown.items()}
         )
 
@@ -448,7 +462,7 @@ class MultiAgentPipeline:
             was_revised=was_revised,
             specialist_outputs=final_state.get("specialist_outputs", {}),
             token_breakdown=breakdown,
-            num_specialists_invoked=metrics.num_specialists_invoked,
+            num_specialists_invoked=num_specialists_invoked,
             supervisor_plan=final_state.get("supervisor_plan", ""),
             delegation_requests=[d.__dict__ for d in final_state.get("delegations", [])]
         )

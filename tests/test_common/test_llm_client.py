@@ -141,7 +141,7 @@ class TestGetEmbeddings:
             result = get_embeddings()
             assert isinstance(result, BatchedVertexAIEmbeddings)
             mock_embed.assert_called_once_with(
-                model_name="gemini-embedding-001",
+                model="gemini-embedding-001",
                 project="my-project",
                 location="global",
             )

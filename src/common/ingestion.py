@@ -19,6 +19,7 @@ import logging
 import os
 import re
 import time
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -27,6 +28,7 @@ from edgar import Company, set_identity
 from edgar.httpclient import configure_http
 from lxml import html as lxml_html
 from tenacity import (
+    RetryCallState,
     retry,
     retry_if_exception_type,
     stop_after_attempt,
@@ -77,17 +79,20 @@ TENK_ITEM_LOOKUPS = {
 def _get_sec_config() -> dict:
     """Load SEC EDGAR config from base.yaml."""
     config = load_config()
-    return config.get("sec_edgar", {})
+    sec_config: dict = config.get("sec_edgar", {})
+    return sec_config
 
 
 def _get_rate_limit() -> float:
     """Get rate limit delay from config (seconds between SEC requests)."""
-    return _get_sec_config().get("rate_limit_seconds", 0.15)
+    rate_limit: float = _get_sec_config().get("rate_limit_seconds", 0.15)
+    return rate_limit
 
 
 def _get_http_timeout() -> int:
     """Get HTTP timeout from config."""
-    return _get_sec_config().get("http_timeout", 120)
+    timeout: int = _get_sec_config().get("http_timeout", 120)
+    return timeout
 
 
 def _get_retry_config() -> dict:
@@ -98,6 +103,26 @@ def _get_retry_config() -> dict:
         "backoff_min": sec.get("backoff_min", 5),
         "backoff_max": sec.get("backoff_max", 60),
     }
+
+
+def _log_retry_attempt(label: str, retry_cfg: dict) -> Callable[[RetryCallState], None]:
+    """Build a tenacity `before_sleep` callback that logs a retry attempt.
+
+    `outcome`/`next_action` are only unset before the first attempt, which
+    is impossible when `before_sleep` fires (it always follows a failed
+    attempt) — the None checks satisfy the type checker without masking
+    that invariant.
+    """
+
+    def _log(rs: RetryCallState) -> None:
+        exc_name = rs.outcome.exception().__class__.__name__ if rs.outcome else "unknown"
+        sleep_time = rs.next_action.sleep if rs.next_action else 0.0
+        logger.warning(
+            "%s retry %d/%d after %s — waiting %.0fs...",
+            label, rs.attempt_number, retry_cfg["max_retries"], exc_name, sleep_time,
+        )
+
+    return _log
 
 
 # ---------------------------------------------------------------------------
@@ -260,7 +285,8 @@ def _init_edgar() -> None:
 def _get_sec_email() -> str:
     """Get the SEC email from config."""
     config = load_config()
-    return config.get("sec_edgar_email", "anonymous@example.com")
+    email: str = config.get("sec_edgar_email", "anonymous@example.com")
+    return email
 
 
 # ---------------------------------------------------------------------------
@@ -389,15 +415,10 @@ def _download_via_sgml_path(cik: str, accession_number: str) -> str | None:
         wait=wait_exponential(min=retry_cfg["backoff_min"], max=retry_cfg["backoff_max"]),
         stop=stop_after_attempt(retry_cfg["max_retries"]),
         retry=retry_if_exception_type(_RETRYABLE_HTTP_EXCEPTIONS) | retry_if_exception_type(httpx.HTTPStatusError),
-        before_sleep=lambda rs: logger.warning(
-            "SGML path retry %d/%d after %s — waiting %.0fs...",
-            rs.attempt_number, retry_cfg["max_retries"],
-            rs.outcome.exception().__class__.__name__,
-            rs.next_action.sleep,
-        ),
+        before_sleep=_log_retry_attempt("SGML path", retry_cfg),
         reraise=True,
     )
-    def _download():
+    def _download() -> str:
         acc_clean = accession_number.replace("-", "")
         cik_clean = cik.lstrip("0") or "0"
 
@@ -475,12 +496,7 @@ def _direct_download_filing_text(
         wait=wait_exponential(min=retry_cfg["backoff_min"], max=retry_cfg["backoff_max"]),
         stop=stop_after_attempt(retry_cfg["max_retries"]),
         retry=retry_if_exception_type(_RETRYABLE_HTTP_EXCEPTIONS) | retry_if_exception_type(httpx.HTTPStatusError),
-        before_sleep=lambda rs: logger.warning(
-            "Retry %d/%d after %s — waiting %.0fs...",
-            rs.attempt_number, retry_cfg["max_retries"],
-            rs.outcome.exception().__class__.__name__,
-            rs.next_action.sleep,
-        ),
+        before_sleep=_log_retry_attempt("Direct download", retry_cfg),
         reraise=True,
     )
     def _download_with_retry() -> str:
@@ -555,7 +571,7 @@ def _find_primary_document(
                 if doc_type in ("10-K", "10-K/A"):
                     link = cells[2].xpath(".//a/@href")
                     if link:
-                        href = link[0]
+                        href: str = link[0]
                         if href.startswith("/"):
                             return f"https://www.sec.gov{href}"
                         return href
@@ -821,12 +837,7 @@ def download_filing(
         wait=wait_exponential(min=retry_cfg["backoff_min"], max=retry_cfg["backoff_max"]),
         stop=stop_after_attempt(retry_cfg["max_retries"]),
         retry=retry_if_exception_type(_RETRYABLE_HTTP_EXCEPTIONS) | retry_if_exception_type(httpx.HTTPStatusError),
-        before_sleep=lambda rs: logger.warning(
-            "Discovery retry %d/%d after %s — waiting %.0fs...",
-            rs.attempt_number, retry_cfg["max_retries"],
-            rs.outcome.exception().__class__.__name__,
-            rs.next_action.sleep,
-        ),
+        before_sleep=_log_retry_attempt("Discovery", retry_cfg),
         reraise=True,
     )
     def _discover_filing():

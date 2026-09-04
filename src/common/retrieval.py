@@ -57,7 +57,7 @@ def load_or_build_documents(
     if docs_cache_path.exists():
         logger.info("⚡ Loading cached documents from %s", docs_cache_path)
         with open(docs_cache_path, "rb") as f:
-            documents = pickle.load(f)  # noqa: S301
+            documents: list[Document] = pickle.load(f)  # noqa: S301
         logger.info("Loaded %d cached documents", len(documents))
         return documents
 
@@ -159,6 +159,9 @@ class BM25RetrieverWithScores(BaseRetriever):
 
     def _get_relevant_documents(self, query: str, **kwargs) -> list[Document]:
         """Retrieve top-k documents by BM25 score."""
+        if self._bm25 is None:
+            raise RuntimeError("BM25 index not initialized")
+
         tokenized_query = query.lower().split()
         scores = self._bm25.get_scores(tokenized_query)
 

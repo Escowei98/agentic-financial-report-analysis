@@ -54,7 +54,7 @@ def validate_top_configs(
         t for t in study.trials
         if t.state == optuna.trial.TrialState.COMPLETE
     ]
-    completed.sort(key=lambda t: t.value, reverse=True)
+    completed.sort(key=lambda t: t.value if t.value is not None else float("-inf"), reverse=True)
     top_trials = completed[:top_n]
 
     logger.info(

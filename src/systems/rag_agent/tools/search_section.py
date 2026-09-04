@@ -13,7 +13,7 @@ make targeted retrievals instead of blindly searching all chunks.
 """
 
 import logging
-from typing import Any
+from typing import Any, cast
 
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
@@ -152,7 +152,10 @@ def create_search_section_tool(
             candidates = vectorstore.similarity_search(
                 query=ranking_query,
                 k=pre_rerank_top_k,
-                filter=where_filter,
+                # langchain_chroma types `filter` as `dict[str, str]`, but
+                # Chroma's actual filter schema (chromadb.types.Where)
+                # supports the $and/$eq operator syntax used above.
+                filter=cast("dict[str, str]", where_filter),
             )
         except Exception as e:
             logger.error(

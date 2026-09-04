@@ -167,7 +167,7 @@ def get_embeddings(system_name: str | None = None) -> Embeddings:
     model = embedding_config.get("model", "gemini-embedding-001")
 
     inner = VertexAIEmbeddings(
-        model_name=model,
+        model=model,
         project=project,
         location=location,
     )

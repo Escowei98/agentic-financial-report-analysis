@@ -52,7 +52,7 @@ dependencies = [
 ]
 
 [dependency-groups]
-dev = ["pytest>=8.0", "ruff>=0.8", "mypy>=1.13", "jupyter>=1.0", "ipykernel>=6.0"]
+dev = ["pytest>=8.0", "ruff>=0.8", "mypy>=1.13", "jupyter>=1.0", "ipykernel>=6.0", "pandas-stubs>=2.0"]
 
 [tool.ruff]
 line-length = 120
@@ -69,3 +69,12 @@ pythonpath = ["."]
 python_version = "3.12"
 warn_return_any = true
 warn_unused_configs = true
+
+# Third-party libraries without inline types or a stubs package on PyPI.
+# (lxml has a stubs package, but its `.xpath()` return type is a huge, overly
+# generic union — the site accessing it always trusts specific, known-shape
+# XPath results, so treating it as untyped avoids type-narrowing noise that
+# wouldn't catch real bugs.)
+[[tool.mypy.overrides]]
+module = ["edgar.*", "simpleeval.*", "lxml.*", "rank_bm25.*", "flashrank.*"]
+ignore_missing_imports = true

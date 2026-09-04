@@ -30,7 +30,7 @@ pattern in custom_evaluator.py:
 
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from src.common.llm_client import get_judge_llm
 from src.evaluation.process_evaluator import evaluate_set_overlap
@@ -65,11 +65,7 @@ class CitationEvalResult:
     section_recall: float = 0.0
     section_f1: float = 0.0
     method: str = "skipped"  # "deterministic" | "llm_judge" | "skipped"
-    rationales: dict = None
-
-    def __post_init__(self):
-        if self.rationales is None:
-            self.rationales = {}
+    rationales: dict = field(default_factory=dict)
 
     def to_dict(self):
         return {
@@ -353,13 +349,15 @@ def _extract_json(text: str) -> dict:
         cleaned = re.sub(r"^```(?:json)?\s*\n?", "", cleaned)
         cleaned = re.sub(r"\n?```\s*$", "", cleaned)
     try:
-        return json.loads(cleaned)
+        parsed: dict = json.loads(cleaned)
+        return parsed
     except json.JSONDecodeError:
         pass
     match = re.search(r"\{.*\}", cleaned, re.DOTALL)
     if match:
         try:
-            return json.loads(match.group())
+            parsed = json.loads(match.group())
+            return parsed
         except json.JSONDecodeError:
             pass
     logger.warning("Failed to parse JSON from citation judge output: %s", text[:200])
