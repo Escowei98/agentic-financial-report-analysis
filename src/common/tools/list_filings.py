@@ -1,5 +1,5 @@
 """
-List Filings Tool for System 2 (Agent RAG).
+List-filings tool — shared by all agentic systems (S2, S3, S4).
 
 Allows the agent to inspect what SEC 10-K filings are available
 in the knowledge base before deciding how to search.

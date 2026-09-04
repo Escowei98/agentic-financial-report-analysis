@@ -9,26 +9,26 @@ import time
 from dataclasses import dataclass, field
 from typing import Sequence
 
-from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langchain_core.messages import HumanMessage
 from langgraph.graph import END, START, StateGraph
 
+from src.common.agent import build_agent
 from src.common.config import load_config
 from src.common.ingestion import ProcessedFiling
 from src.common.llm_client import get_llm
+from src.common.message_parsing import format_tool_calls_for_prompt, parse_agent_messages
 from src.common.reflection import (
     ReflectionVerdict,
     build_reflection_chain,
     generate_feedback_message,
     unpack_reflection_result,
 )
-from src.common.utils import RunMetrics, TokenUsage, extract_text
-from src.systems.long_context.agent import build_agent
-from src.systems.long_context.pipeline import _format_tool_calls_for_prompt
+from src.common.tools.calculate import calculate
+from src.common.tools.list_filings import create_list_filings_tool
+from src.common.utils import RunMetrics, TokenUsage
 from src.systems.multi_agent.graph import DelegationRequest, MultiAgentState, _merge_token_usage
 from src.systems.multi_agent.prompts import SUPERVISOR_PROMPT, SYNTHESIZER_PROMPT, build_specialist_prompt
 from src.systems.multi_agent.tools import create_delegate_tool
-from src.systems.rag_agent.tools.calculate import calculate
-from src.systems.rag_agent.tools.list_filings import create_list_filings_tool
 
 logger = logging.getLogger(__name__)
 
@@ -145,7 +145,15 @@ class MultiAgentPipeline:
                 iterations = state.get("reflection_iterations", 0)
                 max_iterations = self.config.get("reflection", {}).get("max_iterations", 1)
 
-                if verdict and verdict.get("status") == "revise" and iterations < max_iterations:
+                # `_reflection_node_func` has already incremented
+                # `reflection_iterations` by the time this router runs, so
+                # `iterations` here counts completed reflection passes, not
+                # ones still to come. `<=` (not `<`) makes `max_iterations`
+                # mean "allow this many correction rounds": with the
+                # default of 1, a single 'revise' verdict triggers exactly
+                # one re-synthesis, matching the single-pass policy S2/S3
+                # get from `run_reflection_pass`.
+                if verdict and verdict.get("status") == "revise" and iterations <= max_iterations:
                     return "synthesizer_node"
                 return END
 
@@ -184,31 +192,7 @@ class MultiAgentPipeline:
 
         # Extract answer and tokens
         messages = result.get("messages", [])
-        answer = ""
-        prompt_tokens = 0
-        completion_tokens = 0
-        tool_calls_log = []
-        tool_call_index: dict[str, int] = {}
-
-        for msg in messages:
-            if isinstance(msg, AIMessage):
-                usage = getattr(msg, "usage_metadata", None)
-                if usage:
-                    prompt_tokens += usage.get("input_tokens", 0)
-                    completion_tokens += usage.get("output_tokens", 0)
-                if msg.tool_calls:
-                    for tc in msg.tool_calls:
-                        tool_calls_log.append({"tool": tc["name"], "args": tc["args"], "result": ""})
-                        tool_call_index[tc["id"]] = len(tool_calls_log) - 1
-                if msg.content and not msg.tool_calls:
-                    answer = extract_text(msg.content)
-            elif isinstance(msg, ToolMessage) and msg.content:
-                result_text = extract_text(msg.content)
-                idx = tool_call_index.get(msg.tool_call_id)
-                if idx is not None:
-                    tool_calls_log[idx]["result"] = result_text
-
-        tokens = TokenUsage(prompt_tokens, completion_tokens, prompt_tokens + completion_tokens)
+        answer, tool_calls_log, _, tokens = parse_agent_messages(messages)
 
         # Save to state
         if not hasattr(self, "_current_state"):
@@ -277,31 +261,7 @@ class MultiAgentPipeline:
         )
 
         messages = result.get("messages", [])
-        plan = ""
-        prompt_tokens = 0
-        completion_tokens = 0
-        tool_calls_log = []
-        tool_call_index: dict[str, int] = {}
-
-        for msg in messages:
-            if isinstance(msg, AIMessage):
-                usage = getattr(msg, "usage_metadata", None)
-                if usage:
-                    prompt_tokens += usage.get("input_tokens", 0)
-                    completion_tokens += usage.get("output_tokens", 0)
-                if msg.tool_calls:
-                    for tc in msg.tool_calls:
-                        tool_calls_log.append({"tool": tc["name"], "args": tc["args"], "result": ""})
-                        tool_call_index[tc["id"]] = len(tool_calls_log) - 1
-                if msg.content and not msg.tool_calls:
-                    plan = extract_text(msg.content)
-            elif isinstance(msg, ToolMessage) and msg.content:
-                result_text = extract_text(msg.content)
-                idx = tool_call_index.get(msg.tool_call_id)
-                if idx is not None:
-                    tool_calls_log[idx]["result"] = result_text
-
-        tokens = TokenUsage(prompt_tokens, completion_tokens, prompt_tokens + completion_tokens)
+        plan, tool_calls_log, _, tokens = parse_agent_messages(messages)
         self._current_state["token_breakdown"]["supervisor"] = tokens
         self._current_state["tool_calls_log"].extend(tool_calls_log)
 
@@ -357,31 +317,7 @@ class MultiAgentPipeline:
         )
 
         messages = result.get("messages", [])
-        answer = ""
-        prompt_tokens = 0
-        completion_tokens = 0
-        tool_calls_log = []
-        tool_call_index: dict[str, int] = {}
-
-        for msg in messages:
-            if isinstance(msg, AIMessage):
-                usage = getattr(msg, "usage_metadata", None)
-                if usage:
-                    prompt_tokens += usage.get("input_tokens", 0)
-                    completion_tokens += usage.get("output_tokens", 0)
-                if msg.tool_calls:
-                    for tc in msg.tool_calls:
-                        tool_calls_log.append({"tool": tc["name"], "args": tc["args"], "result": ""})
-                        tool_call_index[tc["id"]] = len(tool_calls_log) - 1
-                if msg.content and not msg.tool_calls:
-                    answer = extract_text(msg.content)
-            elif isinstance(msg, ToolMessage) and msg.content:
-                result_text = extract_text(msg.content)
-                idx = tool_call_index.get(msg.tool_call_id)
-                if idx is not None:
-                    tool_calls_log[idx]["result"] = result_text
-
-        tokens = TokenUsage(prompt_tokens, completion_tokens, prompt_tokens + completion_tokens)
+        answer, tool_calls_log, _, tokens = parse_agent_messages(messages)
 
         # Synthesizer tokens might be appended if this is a reflection loop
         current_breakdown = state.get("token_breakdown", {})
@@ -412,7 +348,7 @@ class MultiAgentPipeline:
             "question": state["user_query"],
             "answer": draft_answer,
             "contexts": "(Specialist outputs were provided to the synthesizer)",
-            "tool_calls": _format_tool_calls_for_prompt(tool_calls),
+            "tool_calls": format_tool_calls_for_prompt(tool_calls),
         })
 
         verdict, prompt_tokens, comp_tokens = unpack_reflection_result(chain_result)
@@ -455,12 +391,6 @@ class MultiAgentPipeline:
             "tool_calls_log": [],
             "token_breakdown": {},
         }
-
-        # To handle lists properly without reducers in StateGraph, we will manually
-        # aggregate the tool_calls_log in the nodes, BUT we just realized the synthesizer
-        # overwrites it if we just return it.
-        # Actually, in LangGraph, if a field is not Annotated with a reducer, it overwrites.
-        # So we should be careful. I will patch `_synthesizer_node_func` to merge.
 
         final_state = self._graph.invoke(initial_state)
 

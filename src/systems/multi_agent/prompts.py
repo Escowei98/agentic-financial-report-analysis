@@ -11,8 +11,7 @@ import logging
 from typing import Sequence
 
 from src.common.answer_format_convention import ANSWER_FORMAT_CONVENTION
-from src.common.ingestion import ProcessedFiling
-from src.systems.long_context.prompt import _fiscal_year_from_metadata
+from src.common.ingestion import ProcessedFiling, fiscal_year_from_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -127,7 +126,7 @@ def _format_single_filing_filtered(
 ) -> str:
     """Render one filing as a Markdown block, filtering for specific sections."""
     ticker = filing.metadata.ticker
-    year = _fiscal_year_from_metadata(filing)
+    year = fiscal_year_from_metadata(filing)
     company = filing.metadata.company_name
 
     # Filter sections. If "Full Text" is requested or no specific sections exist,
@@ -180,7 +179,7 @@ def build_specialist_prompt(
     # 2. Sort for determinism
     sorted_filings = sorted(
         filtered_filings,
-        key=lambda f: (f.metadata.ticker, _fiscal_year_from_metadata(f)),
+        key=lambda f: (f.metadata.ticker, fiscal_year_from_metadata(f)),
     )
 
     # 3. Format with section filtering

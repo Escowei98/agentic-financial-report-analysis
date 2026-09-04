@@ -27,6 +27,8 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import Runnable
 from pydantic import BaseModel, Field
 
+from src.common.message_parsing import format_tool_calls_for_prompt, parse_agent_messages
+
 logger = logging.getLogger(__name__)
 
 
@@ -276,3 +278,98 @@ def unpack_reflection_result(
     raise TypeError(
         f"Unexpected reflection chain result type: {type(chain_result)}"
     )
+
+
+# ---------------------------------------------------------------------------
+#  Shared single-pass reflection + correction round (S2, S3)
+# ---------------------------------------------------------------------------
+
+def run_reflection_pass(
+    *,
+    agent: Any,
+    messages: list,
+    question: str,
+    reflection_chain: Runnable,
+    recursion_limit: int,
+    empty_contexts_placeholder: str,
+    log_prefix: str = "",
+) -> tuple[list, ReflectionVerdict, bool, int, int]:
+    """
+    Run the verifier on a draft answer and, if it asks for a revision,
+    re-invoke the agent exactly once with the feedback appended.
+
+    Shared verbatim by System 2 and System 3. Both re-invoke their ReAct
+    agent with the *full* prior message history plus the feedback message,
+    so both are exposed to the same failure mode and both need the same
+    guard (see below). Keeping this in one place is what makes the symmetry
+    of the self-correction capability between S2 and S3 structural — thesis
+    3.5.1 requires the agentic systems not to differ in self-correction, and
+    two hand-maintained copies had already drifted apart on exactly that
+    point.
+
+    System 4 does not use this helper: its correction round is a conditional
+    edge back to the synthesizer node, which builds a fresh agent and passes
+    a single message rather than replaying a tool-call history. It shares the
+    chain, the verdict schema, the feedback generation and the single-pass
+    policy, but not the re-invocation mechanics, because it has none.
+
+    Args:
+        agent: Compiled LangGraph agent to re-invoke on a `revise` verdict.
+        messages: Message history of the first (draft) pass.
+        question: Original user question.
+        reflection_chain: Chain from `build_reflection_chain`.
+        recursion_limit: Recursion limit for the re-invocation.
+        empty_contexts_placeholder: System-specific wording used when the
+            draft produced no tool outputs. Kept as a parameter rather than
+            unified, because the two systems' placeholders differ in the
+            prompt text that actually reaches the verifier and changing
+            either one would alter measured behaviour.
+        log_prefix: Optional prefix for log lines (e.g. "S3 ").
+
+    Returns:
+        Tuple of (messages, verdict, was_revised, prompt_tokens,
+        completion_tokens). `messages` is the possibly revised history.
+    """
+    draft_answer, draft_tool_calls, draft_contexts, _ = parse_agent_messages(messages)
+
+    chain_result = reflection_chain.invoke({
+        "question": question,
+        "answer": draft_answer,
+        "contexts": "\n\n---\n\n".join(draft_contexts)
+        if draft_contexts
+        else empty_contexts_placeholder,
+        "tool_calls": format_tool_calls_for_prompt(draft_tool_calls),
+    })
+    verdict, prompt_tokens, completion_tokens = unpack_reflection_result(chain_result)
+    logger.info(
+        "%sReflection verdict: status=%s, issues=%s",
+        log_prefix, verdict.status, verdict.issues,
+    )
+
+    was_revised = False
+    feedback_msg = generate_feedback_message(verdict)
+    if feedback_msg is not None:
+        revised_messages = messages + [feedback_msg]
+        try:
+            second_result = agent.invoke(
+                {"messages": revised_messages},
+                config={"recursion_limit": recursion_limit},
+            )
+            messages = second_result.get("messages", revised_messages)
+            was_revised = True
+        except Exception as e:
+            # Known upstream flakiness: Gemini 2.5's per-tool-call "thought
+            # signature" occasionally fails to round-trip through
+            # langchain-google-vertexai when the full message history (incl.
+            # prior tool calls) is resent, surfacing as InvalidArgument
+            # "must include at least one parts field". Not reproducible
+            # deterministically per-question, so it can't be fixed at the
+            # message-construction level. Fall back to the pre-revision
+            # draft rather than losing the query outright.
+            logger.warning(
+                "%sRevision re-invoke failed (%s: %s); keeping pre-revision "
+                "draft answer.",
+                log_prefix, type(e).__name__, e,
+            )
+
+    return messages, verdict, was_revised, prompt_tokens, completion_tokens

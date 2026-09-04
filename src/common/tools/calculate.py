@@ -1,5 +1,5 @@
 """
-Calculate Tool for System 2 (Agent RAG).
+Calculate tool — shared by all agentic systems (S2, S3, S4).
 
 Safe mathematical expression evaluator using simpleeval.
 Supports basic arithmetic, percentages, and common financial calculations

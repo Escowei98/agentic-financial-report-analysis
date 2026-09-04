@@ -24,22 +24,22 @@ import time
 from dataclasses import dataclass, field
 from typing import Sequence
 
-from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langchain_core.messages import HumanMessage
 
+from src.common.agent import build_agent
 from src.common.config import load_config
 from src.common.ingestion import ProcessedFiling
 from src.common.llm_client import get_llm
+from src.common.message_parsing import parse_agent_messages
 from src.common.reflection import (
     ReflectionVerdict,
     build_reflection_chain,
-    generate_feedback_message,
-    unpack_reflection_result,
+    run_reflection_pass,
 )
-from src.common.utils import RunMetrics, TokenUsage, extract_text
-from src.systems.long_context.agent import build_agent
+from src.common.tools.calculate import calculate
+from src.common.tools.list_filings import create_list_filings_tool
+from src.common.utils import RunMetrics, TokenUsage
 from src.systems.long_context.prompt import build_system_prompt
-from src.systems.rag_agent.tools.calculate import calculate
-from src.systems.rag_agent.tools.list_filings import create_list_filings_tool
 
 logger = logging.getLogger(__name__)
 
@@ -218,57 +218,29 @@ class LongContextPipeline:
         reflection_completion_tokens = 0
 
         if self._reflection_chain is not None:
-            draft_answer, draft_tool_calls, draft_contexts, _ = (
-                self._parse_messages(messages)
+            (
+                messages,
+                verdict,
+                was_revised,
+                reflection_prompt_tokens,
+                reflection_completion_tokens,
+            ) = run_reflection_pass(
+                agent=self._agent,
+                messages=messages,
+                question=question,
+                reflection_chain=self._reflection_chain,
+                recursion_limit=recursion_limit,
+                empty_contexts_placeholder=(
+                    "(no tool outputs; agent answered directly from "
+                    "the inlined filings)"
+                ),
+                log_prefix="S3 ",
             )
-
-            chain_result = self._reflection_chain.invoke({
-                "question": question,
-                "answer": draft_answer,
-                "contexts": "\n\n---\n\n".join(draft_contexts)
-                if draft_contexts
-                else "(no tool outputs; agent answered directly from "
-                "the inlined filings)",
-                "tool_calls": _format_tool_calls_for_prompt(draft_tool_calls),
-            })
-            verdict, reflection_prompt_tokens, reflection_completion_tokens = (
-                unpack_reflection_result(chain_result)
-            )
-            logger.info(
-                "S3 reflection verdict: status=%s, issues=%s",
-                verdict.status, verdict.issues,
-            )
-
-            feedback_msg = generate_feedback_message(verdict)
-            if feedback_msg is not None:
-                revised_messages = messages + [feedback_msg]
-                try:
-                    second_result = self._agent.invoke(
-                        {"messages": revised_messages},
-                        config={"recursion_limit": recursion_limit},
-                    )
-                    messages = second_result.get("messages", revised_messages)
-                    was_revised = True
-                except Exception as e:
-                    # Known upstream flakiness: Gemini 2.5's per-tool-call
-                    # "thought signature" occasionally fails to round-trip
-                    # through langchain-google-vertexai when the full
-                    # message history (incl. prior tool calls) is resent,
-                    # surfacing as InvalidArgument "must include at least
-                    # one parts field". Not reproducible deterministically
-                    # per-question, so it can't be fixed at the message-
-                    # construction level here. Fall back to the pre-revision
-                    # draft rather than losing the query outright.
-                    logger.warning(
-                        "S3 revision re-invoke failed (%s: %s); keeping "
-                        "pre-revision draft answer.",
-                        type(e).__name__, e,
-                    )
 
         elapsed = time.perf_counter() - start_time
 
         # --- Aggregate final outputs ---------------------------------------
-        answer, tool_calls_log, contexts, token_usage = self._parse_messages(
+        answer, tool_calls_log, contexts, token_usage = parse_agent_messages(
             messages
         )
 
@@ -309,83 +281,3 @@ class LongContextPipeline:
             reflection_verdict=verdict,
             was_revised=was_revised,
         )
-
-    def _parse_messages(
-        self, messages: list,
-    ) -> tuple[str, list[dict], list[str], TokenUsage]:
-        """
-        Parse LangGraph agent message history into result components.
-
-        Returns:
-            Tuple of (answer, tool_calls_log, contexts, token_usage).
-
-        Note on `contexts`:
-            For S3 the answer is grounded in the inlined system prompt,
-            not in tool outputs. The 'contexts' list therefore typically
-            stays empty (only `list_filings`/`calculate` tool outputs
-            land here, and only when the agent invokes them). This is
-            architecturally correct: feeding the entire ~600k-token
-            filings block into the RAGAS contexts would be misleading.
-            For RAGAS scoring of S3 the evaluation notebook should
-            build the contexts field from ground-truth source sections
-            instead — see the upcoming S3 baseline notebook for the
-            chosen convention.
-        """
-        answer = ""
-        tool_calls_log: list[dict] = []
-        contexts: list[str] = []
-        total_prompt = 0
-        total_completion = 0
-
-        tool_call_index: dict[str, int] = {}  # tool_call_id -> index into tool_calls_log
-
-        for msg in messages:
-            if isinstance(msg, AIMessage):
-                usage = getattr(msg, "usage_metadata", None)
-                if usage:
-                    total_prompt += usage.get("input_tokens", 0)
-                    total_completion += usage.get("output_tokens", 0)
-
-                if msg.tool_calls:
-                    for tc in msg.tool_calls:
-                        tool_calls_log.append({
-                            "tool": tc["name"],
-                            "args": tc["args"],
-                            "result": "",
-                        })
-                        tool_call_index[tc["id"]] = len(tool_calls_log) - 1
-
-                if msg.content and not msg.tool_calls:
-                    answer = extract_text(msg.content)
-
-            elif isinstance(msg, ToolMessage):
-                # Linked back to tool_calls_log via tool_call_id so the
-                # trajectory formatter can show calculate/list_filings
-                # outputs, not just which tool was called.
-                if msg.content:
-                    result_text = extract_text(msg.content)
-                    contexts.append(result_text)
-                    idx = tool_call_index.get(msg.tool_call_id)
-                    if idx is not None:
-                        tool_calls_log[idx]["result"] = result_text
-
-        token_usage = TokenUsage(
-            prompt_tokens=total_prompt,
-            completion_tokens=total_completion,
-            total_tokens=total_prompt + total_completion,
-        )
-
-        return answer, tool_calls_log, contexts, token_usage
-
-
-# ---------------------------------------------------------------------------
-#  Helpers
-# ---------------------------------------------------------------------------
-
-def _format_tool_calls_for_prompt(tool_calls: list[dict]) -> str:
-    """Render tool_calls_log as a readable string for the reflection prompt."""
-    if not tool_calls:
-        return "(no tool calls)"
-    return "\n".join(
-        f"- {tc['tool']}({tc['args']})" for tc in tool_calls
-    )

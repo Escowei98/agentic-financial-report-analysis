@@ -158,3 +158,89 @@ class TestBuildReflectionChain:
 
         call_args = mock_llm.with_structured_output.call_args
         assert call_args.kwargs.get("include_raw") is True
+
+
+class TestRunReflectionPass:
+    """
+    Shared single-pass reflection + correction round (S2 and S3).
+
+    The re-invoke guard is the reason this lives in `common`: S2 and S3 both
+    resend the full message history including prior tool calls, so both are
+    exposed to the same Vertex AI thought-signature round-trip failure. When
+    it was implemented per system, only S3 had the guard.
+    """
+
+    @staticmethod
+    def _chain(status, feedback="", issues=None):
+        chain = MagicMock()
+        chain.invoke.return_value = {
+            "parsed": ReflectionVerdict(
+                status=status, feedback=feedback, issues=issues or []
+            ),
+            "raw": AIMessage(content=""),
+        }
+        return chain
+
+    def _run(self, agent, chain, messages=None, placeholder="(none)"):
+        from src.common.reflection import run_reflection_pass
+        return run_reflection_pass(
+            agent=agent,
+            messages=messages if messages is not None else [AIMessage(content="draft")],
+            question="What was AAPL FY2024 revenue?",
+            reflection_chain=chain,
+            recursion_limit=12,
+            empty_contexts_placeholder=placeholder,
+        )
+
+    def test_accept_verdict_does_not_reinvoke_the_agent(self):
+        agent = MagicMock()
+        messages, verdict, was_revised, _, _ = self._run(agent, self._chain("accept"))
+        agent.invoke.assert_not_called()
+        assert was_revised is False
+        assert verdict.status == "accept"
+        assert [m.content for m in messages] == ["draft"]
+
+    def test_revise_verdict_triggers_exactly_one_reinvoke(self):
+        agent = MagicMock()
+        agent.invoke.return_value = {"messages": [AIMessage(content="revised")]}
+        messages, verdict, was_revised, _, _ = self._run(
+            agent, self._chain("revise", "Add a citation.", ["missing_citation"])
+        )
+        assert agent.invoke.call_count == 1
+        assert was_revised is True
+        assert verdict.status == "revise"
+        assert [m.content for m in messages] == ["revised"]
+
+    def test_reinvoke_failure_falls_back_to_the_draft(self):
+        """The guard: a failed revision must not lose the query."""
+        agent = MagicMock()
+        agent.invoke.side_effect = RuntimeError(
+            "400 InvalidArgument: must include at least one parts field"
+        )
+        draft = [AIMessage(content="draft answer")]
+        messages, verdict, was_revised, _, _ = self._run(
+            agent, self._chain("revise", "Fix it.", ["x"]), messages=draft
+        )
+        assert agent.invoke.call_count == 1
+        assert was_revised is False
+        assert [m.content for m in messages] == ["draft answer"]
+        assert verdict.status == "revise"
+
+    def test_empty_contexts_placeholder_reaches_the_verifier(self):
+        chain = self._chain("accept")
+        self._run(MagicMock(), chain, placeholder="(no retrieval contexts captured)")
+        assert chain.invoke.call_args[0][0]["contexts"] == "(no retrieval contexts captured)"
+
+    def test_tool_outputs_are_passed_as_contexts(self):
+        from langchain_core.messages import ToolMessage
+        chain = self._chain("accept")
+        msgs = [
+            AIMessage(content="", tool_calls=[{"name": "calculate", "args": {}, "id": "c1"}]),
+            ToolMessage(content="42", tool_call_id="c1"),
+            AIMessage(content="draft"),
+        ]
+        self._run(MagicMock(), chain, messages=msgs)
+        payload = chain.invoke.call_args[0][0]
+        assert payload["contexts"] == "42"
+        assert payload["answer"] == "draft"
+        assert payload["tool_calls"] == "- calculate({})"

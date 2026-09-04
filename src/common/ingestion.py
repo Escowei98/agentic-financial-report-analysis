@@ -203,6 +203,31 @@ class ProcessedFiling:
         return cls(metadata=metadata, sections=sections, full_text=full_text)
 
 
+def fiscal_year_from_metadata(filing: ProcessedFiling) -> str:
+    """
+    Derive a 4-digit fiscal-year string from filing metadata.
+
+    Falls back to the filing-date year if `fiscal_year_end` is missing.
+
+    Shared by the two long-context prompt builders (S3 and S4), which both
+    label every inlined filing block with its fiscal year. Note that
+    `chunker.py` and `common/tools/list_filings.py` derive the year with a
+    simpler expression that has no filing-date fallback; those two are
+    deliberately left as they are, because their value flows into the
+    ChromaDB chunk metadata and into the cache key, and changing it would
+    invalidate the indices the reported results were produced with. For the
+    present corpus the distinction is moot — all twelve filings carry a
+    `fiscal_year_end`, so all three variants return the same value.
+    """
+    fye = filing.metadata.fiscal_year_end or ""
+    if len(fye) >= 4 and fye[:4].isdigit():
+        return fye[:4]
+    fd = filing.metadata.filing_date or ""
+    if len(fd) >= 4 and fd[:4].isdigit():
+        return fd[:4]
+    return "unknown"
+
+
 # ---------------------------------------------------------------------------
 #  EDGAR initialization
 # ---------------------------------------------------------------------------

@@ -18,7 +18,7 @@ import logging
 from typing import Sequence
 
 from src.common.answer_format_convention import ANSWER_FORMAT_CONVENTION
-from src.common.ingestion import ProcessedFiling
+from src.common.ingestion import ProcessedFiling, fiscal_year_from_metadata
 
 logger = logging.getLogger(__name__)
 
@@ -106,21 +106,6 @@ OUTPUT_RULES = """\
 #  Filing block formatting
 # ---------------------------------------------------------------------------
 
-def _fiscal_year_from_metadata(filing: ProcessedFiling) -> str:
-    """
-    Derive a 4-digit fiscal-year string from filing metadata.
-
-    Falls back to the filing-date year if `fiscal_year_end` is missing.
-    """
-    fye = filing.metadata.fiscal_year_end or ""
-    if len(fye) >= 4 and fye[:4].isdigit():
-        return fye[:4]
-    fd = filing.metadata.filing_date or ""
-    if len(fd) >= 4 and fd[:4].isdigit():
-        return fd[:4]
-    return "unknown"
-
-
 def _format_single_filing(filing: ProcessedFiling) -> str:
     """
     Render one filing as a Markdown block.
@@ -133,7 +118,7 @@ def _format_single_filing(filing: ProcessedFiling) -> str:
         {full markdown content}
     """
     ticker = filing.metadata.ticker
-    year = _fiscal_year_from_metadata(filing)
+    year = fiscal_year_from_metadata(filing)
     company = filing.metadata.company_name
     section_names = list(filing.sections.keys()) if filing.sections else ["Full Text"]
 
@@ -157,7 +142,7 @@ def _format_filings_block(filings: Sequence[ProcessedFiling]) -> str:
 
     sorted_filings = sorted(
         filings,
-        key=lambda f: (f.metadata.ticker, _fiscal_year_from_metadata(f)),
+        key=lambda f: (f.metadata.ticker, fiscal_year_from_metadata(f)),
     )
     blocks = [_format_single_filing(f) for f in sorted_filings]
     return "\n\n---\n\n".join(blocks)

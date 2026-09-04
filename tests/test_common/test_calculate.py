@@ -4,7 +4,7 @@ Unit tests for the calculate tool.
 
 import pytest
 
-from src.systems.rag_agent.tools.calculate import calculate
+from src.common.tools.calculate import calculate
 
 
 class TestCalculate:

@@ -17,22 +17,23 @@ from pathlib import Path
 from typing import Sequence
 
 from langchain_core.documents import Document
-from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langchain_core.messages import HumanMessage
 
+from src.common.agent import build_agent
 from src.common.config import load_config
 from src.common.ingestion import ProcessedFiling
 from src.common.llm_client import get_embeddings, get_llm
+from src.common.message_parsing import parse_agent_messages
 from src.common.reflection import (
     ReflectionVerdict,
     build_reflection_chain,
-    generate_feedback_message,
-    unpack_reflection_result,
+    run_reflection_pass,
 )
 from src.common.retrieval import build_hybrid_retriever, build_vectorstore, load_or_build_documents
-from src.common.utils import RunMetrics, TokenUsage, compute_filings_hash, extract_text
-from src.systems.rag_agent.agent import build_agent
-from src.systems.rag_agent.tools.calculate import calculate
-from src.systems.rag_agent.tools.list_filings import create_list_filings_tool
+from src.common.tools.calculate import calculate
+from src.common.tools.list_filings import create_list_filings_tool
+from src.common.utils import RunMetrics, TokenUsage, compute_filings_hash
+from src.systems.rag_agent.agent import SYSTEM_PROMPT
 from src.systems.rag_agent.tools.retrieve_chunks import create_retrieve_chunks_tool
 from src.systems.rag_agent.tools.search_section import create_search_section_tool
 
@@ -231,6 +232,7 @@ class AgentRAGPipeline:
         self._agent = build_agent(
             llm=self._llm,
             tools=tools,
+            system_prompt=SYSTEM_PROMPT,
             recursion_limit=recursion_limit,
         )
 
@@ -290,41 +292,25 @@ class AgentRAGPipeline:
         reflection_completion_tokens = 0
 
         if self._reflection_chain is not None:
-            draft_answer, draft_tool_calls, draft_contexts, _ = (
-                self._parse_messages(messages)
+            (
+                messages,
+                verdict,
+                was_revised,
+                reflection_prompt_tokens,
+                reflection_completion_tokens,
+            ) = run_reflection_pass(
+                agent=self._agent,
+                messages=messages,
+                question=question,
+                reflection_chain=self._reflection_chain,
+                recursion_limit=recursion_limit,
+                empty_contexts_placeholder="(no retrieval contexts captured)",
             )
-
-            chain_result = self._reflection_chain.invoke({
-                "question": question,
-                "answer": draft_answer,
-                "contexts": "\n\n---\n\n".join(draft_contexts)
-                if draft_contexts
-                else "(no retrieval contexts captured)",
-                "tool_calls": _format_tool_calls_for_prompt(draft_tool_calls),
-            })
-            verdict, reflection_prompt_tokens, reflection_completion_tokens = (
-                unpack_reflection_result(chain_result)
-            )
-            logger.info(
-                "Reflection verdict: status=%s, issues=%s",
-                verdict.status, verdict.issues,
-            )
-
-            feedback_msg = generate_feedback_message(verdict)
-            if feedback_msg is not None:
-                # Second pass: re-invoke agent with full prior state + feedback.
-                revised_messages = messages + [feedback_msg]
-                second_result = self._agent.invoke(
-                    {"messages": revised_messages},
-                    config={"recursion_limit": recursion_limit},
-                )
-                messages = second_result.get("messages", revised_messages)
-                was_revised = True
 
         elapsed = time.perf_counter() - start_time
 
         # --- Aggregate final outputs from the (possibly revised) history ---
-        answer, tool_calls_log, contexts, token_usage = self._parse_messages(
+        answer, tool_calls_log, contexts, token_usage = parse_agent_messages(
             messages
         )
 
@@ -365,75 +351,3 @@ class AgentRAGPipeline:
             reflection_verdict=verdict,
             was_revised=was_revised,
         )
-
-    def _parse_messages(
-        self, messages: list,
-    ) -> tuple[str, list[dict], list[str], TokenUsage]:
-        """
-        Parse LangGraph agent message history to extract results and metrics.
-
-        Returns:
-            Tuple of (answer, tool_calls_log, contexts, token_usage)
-        """
-        answer = ""
-        tool_calls_log = []
-        contexts = []
-        total_prompt = 0
-        total_completion = 0
-
-        tool_call_index: dict[str, int] = {}  # tool_call_id -> index into tool_calls_log
-
-        for msg in messages:
-            if isinstance(msg, AIMessage):
-                # Accumulate token usage from all AI messages
-                usage = getattr(msg, "usage_metadata", None)
-                if usage:
-                    total_prompt += usage.get("input_tokens", 0)
-                    total_completion += usage.get("output_tokens", 0)
-
-                # Track tool calls made by the agent
-                if msg.tool_calls:
-                    for tc in msg.tool_calls:
-                        tool_calls_log.append({
-                            "tool": tc["name"],
-                            "args": tc["args"],
-                            "result": "",
-                        })
-                        tool_call_index[tc["id"]] = len(tool_calls_log) - 1
-
-                # Last AI message with content is the final answer
-                if msg.content and not msg.tool_calls:
-                    answer = extract_text(msg.content)
-
-            elif isinstance(msg, ToolMessage):
-                # Tool outputs serve as context AND are linked back to the
-                # tool_calls_log entry that produced them (via tool_call_id),
-                # so the trajectory formatter can show what was actually
-                # retrieved, not just which tool/args were used.
-                if msg.content:
-                    result_text = extract_text(msg.content)
-                    contexts.append(result_text)
-                    idx = tool_call_index.get(msg.tool_call_id)
-                    if idx is not None:
-                        tool_calls_log[idx]["result"] = result_text
-
-        token_usage = TokenUsage(
-            prompt_tokens=total_prompt,
-            completion_tokens=total_completion,
-            total_tokens=total_prompt + total_completion,
-        )
-
-        return answer, tool_calls_log, contexts, token_usage
-
-
-# ---------------------------------------------------------------------------
-#  Helpers
-# ---------------------------------------------------------------------------
-
-def _format_tool_calls_for_prompt(tool_calls: list[dict]) -> str:
-    """Render tool_calls_log as a readable string for the reflection prompt."""
-    if not tool_calls:
-        return "(no tool calls)"
-    return "\n".join(
-        f"- {tc['tool']}({tc['args']})" for tc in tool_calls
-    )
