@@ -94,9 +94,12 @@ def get_judge_llm(**kwargs) -> BaseChatModel:
     Get the shared LLM-as-a-judge instance used by ALL evaluation code
     (RAGAS, custom metrics, reasoning evaluator).
 
-    Deliberately backed by a different provider (OpenAI) than the Gemini
-    models the four systems under test use for generation, to avoid
-    same-model self-preference bias in LLM-as-a-judge scoring.
+    Configured in `configs/evaluation.yaml`, not in `base.yaml`: none of the
+    four systems under test reads it. Deliberately backed by a different
+    provider (OpenAI) than the Gemini models those systems generate with, to
+    avoid same-model self-preference bias in LLM-as-a-judge scoring; the
+    `provider` field is validated here so that decision cannot be silently
+    reverted by editing the config.
 
     Args:
         **kwargs: Overrides for ChatOpenAI (e.g., max_output_tokens).
@@ -104,8 +107,17 @@ def get_judge_llm(**kwargs) -> BaseChatModel:
     Returns:
         Configured ChatOpenAI instance.
     """
-    config = load_config()
-    judge_config = config.get("evaluation", {}).get("judge", {})
+    config = load_config("evaluation")
+    judge_config = config.get("judge", {})
+
+    provider = judge_config.get("provider", "openai")
+    if provider != "openai":
+        raise ValueError(
+            f"Unsupported judge provider {provider!r} in configs/evaluation.yaml. "
+            "Only 'openai' is implemented. The judge must stay outside the "
+            "Gemini family the four systems generate with — see "
+            "docs/decisions/EVAL_DECISION_LOG.md [2026-08-01]."
+        )
 
     api_key = config.get("openai_api_key")
     if not api_key:

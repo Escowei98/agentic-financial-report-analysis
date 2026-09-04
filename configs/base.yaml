@@ -16,50 +16,9 @@ sec_edgar:
   backoff_min: 5 # Exponential backoff minimum (seconds)
   backoff_max: 60 # Exponential backoff maximum (seconds)
 
-evaluation:
-  # Shared judge LLM for ALL evaluation judging (RAGAS, custom metrics,
-  # reasoning evaluator). Deliberately a different provider than the
-  # Gemini models under test (see src/common/llm_client.py:get_judge_llm)
-  # to avoid same-model self-preference bias in LLM-as-a-judge scoring.
-  judge:
-    provider: "openai"
-    model: "gpt-4o-mini"
-    temperature: 0.0
-
-  # 1. Quality Metrics (H1, H2, H3)
-  quality_metrics:
-    ragas: # Out-of-the-box RAGAS metrics
-      - faithfulness # H2: Hallucination detection
-      - answer_relevancy # General answer quality
-      - context_precision # RAG retrieval signal-to-noise
-      - context_recall # RAG retrieval completeness
-      - answer_correctness # Answer vs. gold standard
-    custom: # Custom-implemented metrics
-      - exact_match # H2: Numerical accuracy for financial data
-      - answer_recall # H1/H3: Fact completeness vs. gold standard
-      - cross_document_success_rate # H1/H3: Multi-document synthesis success
-
-  # 2. Efficiency Metrics (Trade-Off Analysis)
-  efficiency_metrics:
-    - total_token_usage # Input + output tokens per query
-    - end_to_end_latency # Wall-clock time per query (seconds)
-    - cost_per_correct_answer # Derived: total_cost / correct_answers
-
-  # 3. Agent & Process Metrics (agentic systems only)
-  agent_metrics:
-    - correction_rate # H2: How often did reflection/reviewer catch errors?
-    - number_of_steps # Complexity indicator per query
-
-  # 4. Reasoning Quality Metrics (LLM-as-a-Judge, two-tier)
-  # Judge model/temperature: see top-level `evaluation.judge` above.
-  reasoning_metrics:
-    core_dimensions:       # Tier 1: applied to S1-S4
-      - logical_soundness
-      - synthesis_quality
-      - evidence_faithfulness
-    agentic_dimensions:    # Tier 2: applied to S2-S4 only
-      - tool_selection
-      - error_recovery
+# Evaluation configuration lives in configs/evaluation.yaml — it is read by
+# src/evaluation/ and by src/common/llm_client.py::get_judge_llm, never by any
+# of the four systems under test.
 
 companies:
   - ticker: AAPL
