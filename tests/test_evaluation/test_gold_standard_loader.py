@@ -7,8 +7,6 @@ from pathlib import Path
 import pytest
 
 from src.evaluation.gold_standard_loader import (
-    GoldStandardItem,
-    gold_standard_to_ragas_dataset,
     load_gold_standard,
 )
 
@@ -71,39 +69,3 @@ class TestLoadGoldStandard:
         """Should raise FileNotFoundError for missing file."""
         with pytest.raises(FileNotFoundError):
             load_gold_standard("/nonexistent/path.csv")
-
-
-class TestGoldStandardToRagasDataset:
-    """Tests for gold_standard_to_ragas_dataset()."""
-
-    def test_conversion(self):
-        """Should convert to RAGAS format correctly."""
-        items = [
-            GoldStandardItem(
-                id=1, question="Q1?", ground_truth="A1",
-                query_type="Single", doc_refs="AAPL_2024",
-                source_section="Item 7", rationale="",
-            ),
-        ]
-        result = gold_standard_to_ragas_dataset(
-            items=items,
-            answers=["Generated A1"],
-            contexts=[["Context chunk 1", "Context chunk 2"]],
-        )
-
-        assert result["question"] == ["Q1?"]
-        assert result["ground_truth"] == ["A1"]
-        assert result["answer"] == ["Generated A1"]
-        assert result["contexts"] == [["Context chunk 1", "Context chunk 2"]]
-
-    def test_length_mismatch(self):
-        """Should raise ValueError on mismatched lengths."""
-        items = [
-            GoldStandardItem(
-                id=1, question="Q?", ground_truth="A",
-                query_type="Single", doc_refs="X",
-                source_section="", rationale="",
-            ),
-        ]
-        with pytest.raises(ValueError, match="Length mismatch"):
-            gold_standard_to_ragas_dataset(items, answers=[], contexts=[["ctx"]])

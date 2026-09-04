@@ -112,11 +112,10 @@ class ReasoningEvalResult:
 #  System name constants
 # ---------------------------------------------------------------------------
 
-# Systems that have agentic capabilities (tools, reflection)
+# Systems that have agentic capabilities (tools, reflection) and therefore
+# receive the Agentic Score in addition to the Core Score. Everything not
+# listed here (i.e. rag_monolith) is scored on the Core Score only.
 AGENTIC_SYSTEMS = {"rag_agent", "long_context", "multi_agent"}
-
-# Systems without agentic capabilities
-NON_AGENTIC_SYSTEMS = {"rag_monolith"}
 
 # Tool inventories per system (used in Agentic Judge prompt)
 SYSTEM_TOOLS = {

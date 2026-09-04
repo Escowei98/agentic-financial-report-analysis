@@ -227,34 +227,3 @@ def load_gold_standard(
         filter_answerable,
     )
     return items
-
-
-def gold_standard_to_ragas_dataset(
-    items: list[GoldStandardItem],
-    answers: list[str],
-    contexts: list[list[str]],
-) -> dict:
-    """Convert gold standard items + RAG results to RAGAS evaluation format.
-
-    RAGAS expects a dict with keys: question, ground_truth, answer, contexts.
-
-    Args:
-        items: Gold standard Q&A pairs.
-        answers: RAG-generated answers (one per item).
-        contexts: Retrieved contexts per query (list of lists).
-
-    Returns:
-        Dict compatible with RAGAS evaluate().
-    """
-    if len(items) != len(answers) or len(items) != len(contexts):
-        raise ValueError(
-            f"Length mismatch: {len(items)} items, {len(answers)} answers, "
-            f"{len(contexts)} contexts"
-        )
-
-    return {
-        "question": [item.question for item in items],
-        "ground_truth": [item.ground_truth for item in items],
-        "answer": answers,
-        "contexts": contexts,
-    }

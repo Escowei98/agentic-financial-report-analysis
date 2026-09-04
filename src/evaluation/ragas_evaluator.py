@@ -40,16 +40,14 @@ ABLATION_METRICS = [
     answer_correctness,
 ]
 
-# The three metrics that score the `retrieved_contexts` field against the
-# answer/ground truth. Only meaningful for systems with an observable
-# retrieval step whose output is the actual evidence the answer was
-# grounded in (see eval_runner.py's include_context_metrics decision and
-# docs/decisions/EVAL_DECISION_LOG.md [2026-08-16]).
-CONTEXT_METRICS = [context_precision, context_recall, faithfulness]
-
 # Metrics that compare the final answer against the question/ground truth
-# directly and don't depend on `retrieved_contexts` at all — meaningful
-# for every system regardless of architecture.
+# directly and don't depend on `retrieved_contexts` at all — meaningful for
+# every system regardless of architecture. The complementary three
+# (context_precision, context_recall, faithfulness) score the
+# `retrieved_contexts` field and are therefore only computed for systems
+# with an observable retrieval step; see eval_runner.py's
+# include_context_metrics decision and
+# docs/decisions/EVAL_DECISION_LOG.md [2026-08-16].
 ANSWER_METRICS = [answer_relevancy, answer_correctness]
 
 
