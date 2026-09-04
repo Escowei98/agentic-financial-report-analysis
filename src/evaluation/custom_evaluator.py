@@ -174,6 +174,16 @@ def _deterministic_numeric_match(
 
 # ---------------------------------------------------------------------------
 #  Prompts
+#
+#  exact_match is dispatched by answer type (see _classify_answer_type):
+#  atomic numeric values, cross-entity comparison verdicts, and qualitative/
+#  categorical claims each get a purpose-built prompt rather than one
+#  generic numeric-match prompt for all three. See EVAL_DECISION_LOG.md
+#  [2026-09] for the rationale (a single numeric-match prompt was found to
+#  near-always fail on qualitative items via literal wording, and the
+#  deterministic pre-check is unsound for comparison items -- it matches
+#  numbers as an unordered set with no entity binding, so a reversed verdict
+#  with the same two raw numbers present would be falsely confirmed).
 # ---------------------------------------------------------------------------
 
 EXACT_MATCH_PROMPT = """\
@@ -193,6 +203,46 @@ Rules:
 Output ONLY a JSON object:
 {{
   "rationale": "<1-2 sentences explaining if the number matches>",
+  "score": <1.0 for match, 0.0 for mismatch>
+}}
+"""
+
+COMPARISON_PROMPT = """\
+You are a strict financial evaluator. The Ground Truth is a COMPARATIVE claim between two entities (e.g. "WINNER (X vs LOSER Y)") -- it names which entity is greater/leads on a specific measure, along with supporting figures for both.
+
+**Question:** {question}
+**Ground Truth:** {ground_truth} {gt_unit}
+**System Answer:** {answer}
+
+Rules:
+1. The PRIMARY criterion is the verdict: the System Answer must identify the same winning/leading entity as the Ground Truth. If the winner is wrong or reversed, this is a MISMATCH regardless of how accurate any numbers in the answer are.
+2. The SECONDARY criterion is the supporting figures: numbers for each entity should match the Ground Truth's figures for that same entity, allowing for reasonable rounding and derived-calculation differences (e.g., 2.08 or 2.1 is an acceptable match for 2.0 if it clearly stems from the same underlying calculation). Do not fail a correct verdict purely for imprecise secondary figures.
+3. Units must be semantically equivalent (e.g., "$1.2B", "1.2 billion dollars", "1,200 million" are equivalent).
+4. The system answer can contain extra text, as long as the correct verdict is clearly and unambiguously stated.
+
+Output ONLY a JSON object:
+{{
+  "rationale": "<1-2 sentences explaining if the verdict (and figures) match>",
+  "score": <1.0 for correct verdict with acceptable figures, 0.0 for a wrong or reversed verdict>
+}}
+"""
+
+QUALITATIVE_PROMPT = """\
+You are an expert evaluator. The Ground Truth is a QUALITATIVE or categorical claim (a trend, direction, category, period/date, or yes/no answer) without one specific number to match.
+
+**Question:** {question}
+**Ground Truth:** {ground_truth}
+**System Answer:** {answer}
+
+Rules:
+1. Judge semantic equivalence, not literal wording. E.g. "Slightly rising" and "increased modestly year over year" convey the same claim; "FY2024" and "the fiscal year 2024" are the same category.
+2. The System Answer's core qualitative/categorical claim must match the Ground Truth's core claim.
+3. Additional supporting detail (e.g. a year-by-year breakdown before stating the overall trend) is fine and must not be penalized, as long as the overall claim is consistent with the Ground Truth.
+4. If the Ground Truth and System Answer disagree on the claim (e.g. GT says "increasing", answer says "decreasing" or "flat"; or GT says "FY2024" and the answer says "FY2023"), it is a MISMATCH.
+
+Output ONLY a JSON object:
+{{
+  "rationale": "<1-2 sentences explaining if the qualitative claim matches>",
   "score": <1.0 for match, 0.0 for mismatch>
 }}
 """
@@ -269,6 +319,22 @@ def _extract_json(text: str) -> dict:
     logger.warning("Failed to parse JSON from judge output: %s", text[:200])
     return {}
 
+
+def _classify_answer_type(item) -> str:
+    """Dispatch key for exact_match scoring strategy.
+
+    "comparison" (FA-4, cross-entity verdicts) and "qualitative"
+    (gt_unit == "text", no single number to match) each need a scoring
+    approach that a generic atomic-numeric-match prompt can't provide --
+    see the module comment above the prompt definitions.
+    """
+    if item.fa_type == "FA-4":
+        return "comparison"
+    if (item.gt_unit or "").strip().lower() == "text":
+        return "qualitative"
+    return "numeric_atomic"
+
+
 def evaluate_custom_metrics(item, answer: str) -> CustomEvalResult:
     """
     Evaluate a single item against the custom domain metrics.
@@ -285,12 +351,26 @@ def evaluate_custom_metrics(item, answer: str) -> CustomEvalResult:
     llm = get_eval_llm()
     result = CustomEvalResult()
 
+    answer_type = _classify_answer_type(item)
+
     # Deterministic numeric pre-check: only ever confirms a match (True) or
     # is inconclusive (None); never asserts a mismatch on its own. See
-    # module-level comment above _deterministic_numeric_match.
+    # module-level comment above _deterministic_numeric_match. Restricted to
+    # "numeric_atomic" items -- it compares numbers as an unordered set with
+    # no entity binding, which is unsound for "comparison" items (a reversed
+    # two-entity verdict with the same two raw numbers present would be
+    # falsely confirmed as a match).
     det_match = None
-    if item.expected_answerable and item.ground_truth:
+    if item.expected_answerable and item.ground_truth and answer_type == "numeric_atomic":
         det_match = _deterministic_numeric_match(item.ground_truth, answer, item.gt_unit)
+
+    # gt_unit is only meaningful for numeric_atomic/comparison prompts, and
+    # even there may itself be "text"/"n/a" for a handful of items (e.g. a
+    # comparison whose gt_value embeds its own units) -- don't leak that
+    # literally into the judge prompt.
+    gt_unit_display = (
+        item.gt_unit if (item.gt_unit or "").strip().lower() not in ("", "text", "n/a") else ""
+    )
 
     # 1. Exact Match (Only if there is a Ground Truth value and it's answerable)
     if item.expected_answerable and item.ground_truth:
@@ -300,12 +380,26 @@ def evaluate_custom_metrics(item, answer: str) -> CustomEvalResult:
                 "Deterministic numeric match (unit-normalized, within tolerance); LLM judge skipped."
             )
         else:
-            prompt = EXACT_MATCH_PROMPT.format(
-                question=item.question,
-                ground_truth=item.ground_truth,
-                gt_unit=item.gt_unit,
-                answer=answer
-            )
+            if answer_type == "comparison":
+                prompt = COMPARISON_PROMPT.format(
+                    question=item.question,
+                    ground_truth=item.ground_truth,
+                    gt_unit=gt_unit_display,
+                    answer=answer,
+                )
+            elif answer_type == "qualitative":
+                prompt = QUALITATIVE_PROMPT.format(
+                    question=item.question,
+                    ground_truth=item.ground_truth,
+                    answer=answer,
+                )
+            else:
+                prompt = EXACT_MATCH_PROMPT.format(
+                    question=item.question,
+                    ground_truth=item.ground_truth,
+                    gt_unit=gt_unit_display,
+                    answer=answer,
+                )
             response = llm.invoke(prompt)
             data = _extract_json(response.content if hasattr(response, "content") else str(response))
             result.exact_match = float(data.get("score", 0.0))

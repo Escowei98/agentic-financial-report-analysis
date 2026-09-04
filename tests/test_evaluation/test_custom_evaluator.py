@@ -123,3 +123,124 @@ def test_evaluate_custom_metrics_deterministic_shortcut_skips_llm():
     assert result.exact_match == 1.0
     assert result.answer_recall == 1.0
     assert mock_llm.invoke.call_count == 0  # deterministic match short-circuits both LLM calls
+
+
+# ---------------------------------------------------------------------------
+#  Type-conditioned exact_match (comparison / qualitative buckets)
+# ---------------------------------------------------------------------------
+
+def test_classify_answer_type_comparison():
+    item = GoldStandardItem(
+        id=10, question="q", ground_truth="gt", doc_refs="", fa_type="FA-4", gt_unit="percent"
+    )
+    assert custom_evaluator._classify_answer_type(item) == "comparison"
+
+def test_classify_answer_type_qualitative():
+    item = GoldStandardItem(
+        id=11, question="q", ground_truth="gt", doc_refs="", fa_type="FA-3", gt_unit="text"
+    )
+    assert custom_evaluator._classify_answer_type(item) == "qualitative"
+
+def test_classify_answer_type_numeric_atomic():
+    item = GoldStandardItem(
+        id=12, question="q", ground_truth="gt", doc_refs="", fa_type="FA-1", gt_unit="USD_billion"
+    )
+    assert custom_evaluator._classify_answer_type(item) == "numeric_atomic"
+
+def test_classify_answer_type_fa4_wins_over_text_gt_unit():
+    # FA-4 items whose gt_value embeds its own units (gt_unit="text", e.g.
+    # gold standard ids 65/115) must still be classified "comparison", not
+    # "qualitative" -- fa_type takes priority over gt_unit.
+    item = GoldStandardItem(
+        id=13, question="q", ground_truth="gt", doc_refs="", fa_type="FA-4", gt_unit="text"
+    )
+    assert custom_evaluator._classify_answer_type(item) == "comparison"
+
+def test_evaluate_custom_metrics_comparison_reversed_verdict_not_deterministic():
+    # Regression test for the entity-binding gap: the deterministic pre-check
+    # matches numbers as an unordered set, so a reversed two-entity verdict
+    # with the same two raw numbers present would be falsely confirmed if it
+    # ran here. For "comparison" items it must never run -- both exact_match
+    # and answer_recall must go through the LLM judge instead.
+    item = GoldStandardItem(
+        id=20,
+        question="Which company had higher revenue growth?",
+        ground_truth="AAPL (12% > AMZN 8%)",
+        gt_unit="percent",
+        doc_refs="1",
+        fa_type="FA-4",
+        expected_answerable=True,
+    )
+    # Same two raw numbers present, but the verdict is reversed.
+    answer = "AMZN grew 12%, AAPL grew 8%, so AMZN had the higher growth rate."
+
+    mock_llm = MagicMock()
+    mock_llm.invoke.side_effect = [
+        MagicMock(content=json.dumps({"score": 0.0, "rationale": "Verdict reversed."})),
+        MagicMock(content=json.dumps({"score": 0.5, "rationale": "Numbers present but misattributed."})),
+    ]
+
+    with patch("src.evaluation.custom_evaluator.get_judge_llm", return_value=mock_llm):
+        result = evaluate_custom_metrics(item, answer)
+
+    assert result.exact_match == 0.0
+    assert mock_llm.invoke.call_count == 2  # no deterministic shortcut for comparison items
+    comparison_prompt_used = mock_llm.invoke.call_args_list[0][0][0]
+    assert "COMPARATIVE claim" in comparison_prompt_used
+
+def test_evaluate_custom_metrics_qualitative_uses_qualitative_prompt():
+    item = GoldStandardItem(
+        id=21,
+        question="What is the trend in operating margin?",
+        ground_truth="Slightly rising",
+        gt_unit="text",
+        doc_refs="1",
+        fa_type="FA-3",
+        subtype="trend_qualitative",
+        expected_answerable=True,
+    )
+    answer = "Operating margin increased modestly year over year."
+
+    mock_llm = MagicMock()
+    mock_llm.invoke.side_effect = [
+        MagicMock(content=json.dumps({"score": 1.0, "rationale": "Same trend."})),
+        MagicMock(content=json.dumps({"score": 1.0, "rationale": "All info present."})),
+    ]
+
+    with patch("src.evaluation.custom_evaluator.get_judge_llm", return_value=mock_llm):
+        result = evaluate_custom_metrics(item, answer)
+
+    assert result.exact_match == 1.0
+    qualitative_prompt_used = mock_llm.invoke.call_args_list[0][0][0]
+    assert "QUALITATIVE or categorical claim" in qualitative_prompt_used
+
+def test_evaluate_custom_metrics_comparison_with_text_gt_unit_no_leak():
+    # e.g. gold standard ids 65/115: FA-4 with gt_unit="text" because the
+    # gt_value embeds its own units. gt_unit must not be leaked into the
+    # judge prompt as a literal "text" suffix.
+    item = GoldStandardItem(
+        id=22,
+        question="Which company had higher operating cash flow?",
+        ground_truth="AAPL (~$11.7B > MSFT ~$10.7B)",
+        gt_unit="text",
+        doc_refs="1",
+        fa_type="FA-4",
+        expected_answerable=True,
+    )
+    answer = "AAPL had higher operating cash flow at ~$11.7B vs MSFT's ~$10.7B."
+
+    mock_llm = MagicMock()
+    mock_llm.invoke.side_effect = [
+        MagicMock(content=json.dumps({"score": 1.0, "rationale": "Verdict and figures match."})),
+        MagicMock(content=json.dumps({"score": 1.0, "rationale": "All info present."})),
+    ]
+
+    with patch("src.evaluation.custom_evaluator.get_judge_llm", return_value=mock_llm):
+        result = evaluate_custom_metrics(item, answer)
+
+    assert result.exact_match == 1.0
+    comparison_prompt_used = mock_llm.invoke.call_args_list[0][0][0]
+    gt_line = next(
+        l for l in comparison_prompt_used.splitlines() if l.startswith("**Ground Truth:**")
+    )
+    assert gt_line.strip() == "**Ground Truth:** AAPL (~$11.7B > MSFT ~$10.7B)"
