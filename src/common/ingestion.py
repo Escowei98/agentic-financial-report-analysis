@@ -19,7 +19,7 @@ import logging
 import os
 import re
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
@@ -1042,32 +1042,71 @@ def load_processed_filing(
     return ProcessedFiling.from_files(md_path, meta_path)
 
 
-def download_all_filings() -> list[ProcessedFiling]:
+def download_all_filings(
+    fiscal_years: Sequence[int] | None = None,
+) -> list[ProcessedFiling]:
     """
-    Download 10-K filings for all configured companies.
+    Download 10-K filings for all configured companies and fiscal years.
 
-    Companies are defined in configs/base.yaml.
+    Companies and fiscal years are defined in configs/base.yaml. The corpus
+    is the cross product of both: every company is fetched once per fiscal
+    year, so `companies × fiscal_years` filings are returned.
+
+    Passing an explicit `fiscal_years` overrides the config — used by tests
+    and by one-off tooling that needs a narrower corpus. Passing an empty
+    list is NOT the same as passing None: it yields an empty corpus, which
+    is treated as a configuration error and raises.
+
+    Note on why this iterates fiscal years at all: `download_filing(ticker)`
+    without a fiscal year returns only the single most recent filing per
+    company. Every evaluation entry point calls this function, so a missing
+    year loop silently shrinks the corpus for all four systems at once —
+    which is exactly what happened to the first full n=150 run (it executed
+    against 4 filings instead of 12, see docs/decisions/DATA_DECISION_LOG.md).
     """
     config = load_config()
     companies = config.get("companies", [])
+    if fiscal_years is None:
+        fiscal_years = config.get("fiscal_years", [])
 
+    if not companies or not fiscal_years:
+        raise ValueError(
+            "Empty corpus: configs/base.yaml must define both `companies` and "
+            f"`fiscal_years` (got {len(companies)} companies, "
+            f"{len(fiscal_years or [])} fiscal years). Refusing to build a "
+            "corpus silently smaller than intended."
+        )
+
+    expected = len(companies) * len(fiscal_years)
     results = []
     for company_info in companies:
         ticker = company_info["ticker"]
         logger.info("=" * 50)
         logger.info("Processing %s (%s)", company_info["name"], ticker)
         logger.info("=" * 50)
-        try:
-            filing = download_filing(ticker)
-            results.append(filing)
-            logger.info(
-                "✓ %s: %d sections extracted, %d chars total",
-                ticker,
-                len(filing.sections),
-                len(filing.full_text),
-            )
-        except Exception as e:
-            logger.error("✗ Failed to process %s: %s", ticker, e)
+        for fiscal_year in fiscal_years:
+            try:
+                filing = download_filing(ticker, fiscal_year=fiscal_year)
+                results.append(filing)
+                logger.info(
+                    "✓ %s FY%s: %d sections extracted, %d chars total",
+                    ticker,
+                    fiscal_year,
+                    len(filing.sections),
+                    len(filing.full_text),
+                )
+            except Exception as e:
+                logger.error("✗ Failed to process %s FY%s: %s", ticker, fiscal_year, e)
+
+    if len(results) != expected:
+        logger.warning(
+            "Corpus incomplete: %d of %d expected filings loaded (%d companies × "
+            "%d fiscal years). Downstream results are NOT comparable to a full run.",
+            len(results),
+            expected,
+            len(companies),
+            len(fiscal_years),
+        )
 
     return results
 

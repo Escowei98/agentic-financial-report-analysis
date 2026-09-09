@@ -131,7 +131,9 @@ class TestTimer:
 class TestComputeFilingsHash:
     """Tests for the content-addressed cache key used by vectorstore/BM25 caches."""
 
-    def _make_filing(self, ticker: str, accession: str) -> ProcessedFiling:
+    def _make_filing(
+        self, ticker: str, accession: str, sections: dict | None = None
+    ) -> ProcessedFiling:
         return ProcessedFiling(
             metadata=FilingMetadata(
                 ticker=ticker,
@@ -141,7 +143,7 @@ class TestComputeFilingsHash:
                 accession_number=accession,
                 fiscal_year_end="2023-12-31",
             ),
-            sections={},
+            sections={} if sections is None else sections,
             full_text="text",
         )
 
@@ -172,3 +174,27 @@ class TestComputeFilingsHash:
     def test_empty_filings_list_still_hashes(self):
         digest = compute_filings_hash([])
         assert len(digest) == 12
+
+    def test_hash_changes_when_section_text_changes(self):
+        """A re-parsed filing keeps its accession number but must not keep
+        its cache. GOOGL FY2024 was re-ingested on 2026-09-06 after its
+        Risk Factors and MD&A had been truncated; an identity-only key
+        would have kept S1/S2 on the broken chunks.
+        """
+        broken = self._make_filing("GOOGL", "0001652044-25-000014", {"MD&A": "stub"})
+        repaired = self._make_filing(
+            "GOOGL", "0001652044-25-000014", {"MD&A": "the full discussion ..."}
+        )
+        assert compute_filings_hash([broken]) != compute_filings_hash([repaired])
+
+    def test_hash_changes_when_a_section_is_missing(self):
+        complete = self._make_filing(
+            "AAPL", "001", {"MD&A": "text", "Risk Factors": "text"}
+        )
+        partial = self._make_filing("AAPL", "001", {"MD&A": "text"})
+        assert compute_filings_hash([complete]) != compute_filings_hash([partial])
+
+    def test_hash_ignores_section_insertion_order(self):
+        a = self._make_filing("AAPL", "001", {"MD&A": "x", "Business": "y"})
+        b = self._make_filing("AAPL", "001", {"Business": "y", "MD&A": "x"})
+        assert compute_filings_hash([a]) == compute_filings_hash([b])

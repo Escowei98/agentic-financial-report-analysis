@@ -29,3 +29,18 @@ companies:
     name: Amazon.com Inc.
   - ticker: GOOGL
     name: Alphabet Inc.
+
+# Corpus = companies × fiscal_years (4 × 3 = 12 Form 10-K).
+#
+# Alternating rather than consecutive fiscal years, deliberately: a 10-K
+# reports the income statement over THREE fiscal years in comparative
+# columns. With consecutive filings (FY2022/23/24) the FY2024 report alone
+# already covers 2022-2024, so every multi-year question collapses into a
+# single-document table lookup and FA-3 stops testing cross-document
+# synthesis at all. With a two-year gap, no single report spans FY2020 to
+# FY2024, so a comparison across that span genuinely requires two documents.
+#
+# Size check (tiktoken cl100k_base): the 12 filings are ~609k tokens, which
+# fits the 1M input window of gemini-2.5-flash used by S3/S4. 16 filings
+# would be ~812k (tight), 20 filings ~1.02M (does not fit).
+fiscal_years: [2020, 2022, 2024]

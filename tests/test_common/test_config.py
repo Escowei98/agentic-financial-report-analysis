@@ -114,3 +114,27 @@ class TestLoadConfig:
         config = load_config()
 
         assert config["google_cloud_project"] == "env-project"
+
+
+class TestLoadConfigRejectsPaths:
+    """`load_config` takes a system NAME, not a path.
+
+    Handing it a path used to resolve to a non-existent "<path>.yaml", skip
+    the merge without a word, and leave the caller on base.yaml alone — which
+    silently put S1 and S2 on diverging chunking defaults and broke the shared
+    retrieval stack FP-3 requires. Failing loudly is the guard.
+    """
+
+    def test_rejects_path_object(self):
+        from pathlib import Path
+
+        with pytest.raises(ValueError, match="bare system name"):
+            load_config(Path("configs/rag_agent.yaml"))
+
+    def test_rejects_yaml_filename(self):
+        with pytest.raises(ValueError, match="bare system name"):
+            load_config("rag_agent.yaml")
+
+    def test_accepts_bare_system_name(self):
+        cfg = load_config("rag_agent")
+        assert cfg.get("chunking", {}).get("chunk_size") == 1000

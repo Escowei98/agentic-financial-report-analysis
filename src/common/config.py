@@ -39,6 +39,17 @@ def load_config(system_name: str | None = None) -> dict:
 
     # Merge system-specific config
     if system_name:
+        # Guard against being handed a path instead of a bare system name.
+        # `CONFIGS_DIR / f"{a_path}.yaml"` silently resolves to a
+        # non-existent file, the merge below is skipped, and every caller
+        # then runs on base.yaml alone — which is how the first full n=150
+        # run ended up with S1 and S2 on diverging built-in defaults.
+        # Failing loudly is the only safe behaviour here.
+        if os.sep in str(system_name) or str(system_name).endswith(".yaml"):
+            raise ValueError(
+                f"load_config() expects a bare system name (e.g. 'rag_agent'), "
+                f"not a path: {system_name!r}. It resolves configs/<name>.yaml itself."
+            )
         system_path = CONFIGS_DIR / f"{system_name}.yaml"
         if system_path.exists():
             with open(system_path, encoding="utf-8") as f:

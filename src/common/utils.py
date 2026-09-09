@@ -168,10 +168,21 @@ def compute_filings_hash(filings: Sequence[ProcessedFiling]) -> str:
     """
     Compute a deterministic SHA-256 hash for a set of filings.
 
-    The hash is derived from sorted ``ticker:accession_number`` pairs so
-    that the same set of filings always produces the same hash regardless
-    of input order.  This is used as a content-addressed cache key for
-    the vectorstore, BM25 index, and chunked documents.
+    The hash is derived from sorted per-filing keys so that the same set of
+    filings always produces the same hash regardless of input order. It is
+    the cache key for the vectorstore, BM25 index, and chunked documents.
+
+    Each key covers the filing's IDENTITY (ticker, accession number) *and*
+    its extracted CONTENT (section names and their text). Identity alone is
+    not enough: an accession number stays the same when a filing is
+    re-parsed, so a corpus repair would leave every cache silently serving
+    the old text. That is not hypothetical — GOOGL FY2024 was re-ingested
+    on 2026-09-06 after its Risk Factors and MD&A had been truncated to a
+    few hundred characters, and the identity-only key would have kept S1
+    and S2 on the broken chunks. See EVAL_DECISION_LOG.md [2026-09-06].
+
+    Section text is folded in as its own SHA-256 rather than concatenated,
+    so hashing stays cheap on a multi-megabyte corpus.
 
     Args:
         filings: Processed SEC 10-K filings.
@@ -180,8 +191,16 @@ def compute_filings_hash(filings: Sequence[ProcessedFiling]) -> str:
         First 12 hex chars of the SHA-256 digest (short but collision-safe
         for the expected number of distinct filing sets).
     """
-    keys = sorted(
-        f"{f.metadata.ticker}:{f.metadata.accession_number}" for f in filings
-    )
-    digest = hashlib.sha256("|".join(keys).encode()).hexdigest()
+    keys = []
+    for f in filings:
+        body = hashlib.sha256()
+        for name in sorted(f.sections):
+            body.update(name.encode())
+            body.update(b"\x00")
+            body.update(f.sections[name].encode())
+            body.update(b"\x00")
+        keys.append(
+            f"{f.metadata.ticker}:{f.metadata.accession_number}:{body.hexdigest()}"
+        )
+    digest = hashlib.sha256("|".join(sorted(keys)).encode()).hexdigest()
     return digest[:12]

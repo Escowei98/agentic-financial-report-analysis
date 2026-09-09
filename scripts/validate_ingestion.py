@@ -9,6 +9,11 @@ For every processed 10-K under `data/processed/`, verifies that:
      intra-word-whitespace tolerated.
   3. The raw file is not merely an iXBRL viewer wrapper (guards against the
      GOOGL FY2022 failure mode).
+  4. The narrative sections (Business, Risk Factors, MD&A) are present and
+     of plausible length. Item 8 alone is not enough: GOOGL FY2024 sat in
+     the corpus for weeks with Risk Factors truncated to 504 chars and MD&A
+     to 964 while its Financial Statements were intact at 128k, so every
+     check above passed. See EVAL_DECISION_LOG.md [2026-09-06].
 
 Exit code:
   0 -> all filings pass
@@ -32,6 +37,17 @@ MIN_ITEM8_CHARS = 50_000
 MIN_RAW_CHARS = 100_000
 MIN_MARKER_HITS = 3
 
+# Floors for the narrative sections, set well below the smallest value
+# observed across the twelve corpus filings so that a real filing never
+# trips them, but far above the few-hundred-char stubs a mis-parse leaves
+# behind. Smallest observed: Business 12,084 (AMZN FY2020), Risk Factors
+# 50,047 (AMZN FY2020), MD&A 15,358 (AAPL FY2024).
+MIN_NARRATIVE_CHARS = {
+    "Business": 8_000,
+    "Risk Factors": 25_000,
+    "MD&A": 10_000,
+}
+
 STATEMENT_MARKERS = {
     "INCOME/OPERATIONS": (
         r"(?:INCOME\s*STATE\s*MENTS?|"
@@ -43,16 +59,15 @@ STATEMENT_MARKERS = {
 }
 
 
-def _extract_item8(md_text: str) -> str:
-    """Return the raw content of the `## Financial Statements` section, or ''."""
-    lines = md_text.splitlines()
+def _extract_section(md_text: str, heading: str) -> str:
+    """Return the raw content of one `## <heading>` section, or ''."""
     inside = False
     collected: list[str] = []
-    for line in lines:
+    for line in md_text.splitlines():
         if line.startswith("## "):
             if inside:
                 break
-            if line.strip() == "## Financial Statements":
+            if line.strip() == f"## {heading}":
                 inside = True
                 continue
         if inside:
@@ -96,7 +111,7 @@ def validate_filing(md_path: Path) -> list[str]:
     """Return a list of failure messages (empty list = all checks passed)."""
     failures: list[str] = []
     md_text = md_path.read_text(encoding="utf-8")
-    item8 = _extract_item8(md_text)
+    item8 = _extract_section(md_text, "Financial Statements")
 
     if not item8:
         failures.append("no `## Financial Statements` section found")
@@ -112,6 +127,16 @@ def validate_filing(md_path: Path) -> list[str]:
             details = ", ".join(f"{n}={c}" for n, c in marker_hits.items())
             failures.append(
                 f"only {hit_count}/{len(STATEMENT_MARKERS)} statement markers found ({details})"
+            )
+
+    for heading, floor in MIN_NARRATIVE_CHARS.items():
+        content = _extract_section(md_text, heading)
+        if not content:
+            failures.append(f"no `## {heading}` section found")
+        elif len(content) < floor:
+            failures.append(
+                f"{heading} section too small: {len(content)} chars "
+                f"(expected >= {floor}) — likely a mis-parsed section boundary"
             )
 
     raw_warn = _check_raw_wrapper(_raw_path_for(md_path))

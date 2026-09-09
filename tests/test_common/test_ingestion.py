@@ -2,9 +2,12 @@
 Unit tests for the SEC EDGAR ingestion pipeline.
 
 Tests content type detection, SGML extraction, hybrid section extraction,
-and the retry-decorated download helpers.
+the retry-decorated download helpers, and the corpus assembly loop.
 """
 
+from types import SimpleNamespace
+
+import pytest
 
 from src.common.ingestion import (
     _detect_content_type,
@@ -173,3 +176,73 @@ class TestExtractSectionsFromText:
     def test_empty_text(self):
         sections = _extract_sections_from_text("")
         assert sections == {}
+
+
+class TestDownloadAllFilings:
+    """The corpus loop.
+
+    The first full n=150 run executed against 4 filings instead of 12 because
+    `download_all_filings()` fetched only the most recent filing per company.
+    These tests pin the two properties that make that impossible to repeat:
+    the fiscal-year loop, and a hard failure on an empty corpus definition.
+    """
+
+    def _patch(self, monkeypatch, config, calls):
+        from src.common import ingestion
+
+        monkeypatch.setattr(ingestion, "load_config", lambda *a, **k: config)
+
+        def fake_download(ticker, fiscal_year=None, **kwargs):
+            calls.append((ticker, fiscal_year))
+            filing = SimpleNamespace(
+                sections={"MD&A": "x"},
+                full_text="x",
+                metadata=SimpleNamespace(ticker=ticker),
+            )
+            return filing
+
+        monkeypatch.setattr(ingestion, "download_filing", fake_download)
+
+    def test_fetches_every_company_year_combination(self, monkeypatch):
+        from src.common.ingestion import download_all_filings
+
+        calls: list[tuple[str, int | None]] = []
+        self._patch(
+            monkeypatch,
+            {
+                "companies": [{"ticker": "AAPL", "name": "Apple"},
+                              {"ticker": "MSFT", "name": "Microsoft"}],
+                "fiscal_years": [2020, 2022, 2024],
+            },
+            calls,
+        )
+        results = download_all_filings()
+
+        assert len(results) == 6, "corpus must be companies x fiscal_years"
+        assert set(calls) == {
+            ("AAPL", 2020), ("AAPL", 2022), ("AAPL", 2024),
+            ("MSFT", 2020), ("MSFT", 2022), ("MSFT", 2024),
+        }
+        # No call may omit the fiscal year — that is the original defect.
+        assert all(year is not None for _, year in calls)
+
+    def test_explicit_fiscal_years_override_config(self, monkeypatch):
+        from src.common.ingestion import download_all_filings
+
+        calls: list[tuple[str, int | None]] = []
+        self._patch(
+            monkeypatch,
+            {"companies": [{"ticker": "AAPL", "name": "Apple"}], "fiscal_years": [2020, 2022]},
+            calls,
+        )
+        download_all_filings(fiscal_years=[2024])
+        assert calls == [("AAPL", 2024)]
+
+    def test_empty_corpus_definition_raises(self, monkeypatch):
+        from src.common.ingestion import download_all_filings
+
+        calls: list[tuple[str, int | None]] = []
+        self._patch(monkeypatch, {"companies": [{"ticker": "AAPL", "name": "Apple"}]}, calls)
+        with pytest.raises(ValueError, match="Empty corpus"):
+            download_all_filings()
+        assert calls == []
