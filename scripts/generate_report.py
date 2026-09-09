@@ -13,7 +13,7 @@ import logging
 from pathlib import Path
 
 import scripts.run_full_eval as full_eval_script
-from src.evaluation.gold_standard_loader import load_gold_standard
+from src.evaluation.gold_standard_loader import GOLD_STANDARD_EN, load_gold_standard
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -50,7 +50,7 @@ def main():
         logger.info("%s (%s) <- %s", label, system_name, path.name)
         results[label] = json.loads(path.read_text())
 
-    gold_items = load_gold_standard(PROJECT_ROOT / "data" / "gold_standard" / "gold_standard_v3_en.csv")
+    gold_items = load_gold_standard(GOLD_STANDARD_EN)
 
     full_eval_script.write_summary_csv(results, OUT_DIR / "full_eval_summary.csv")
     full_eval_script.write_per_query_csv(results, gold_items, OUT_DIR / "full_eval_per_query.csv")

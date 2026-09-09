@@ -1,3 +1,14 @@
+"""Render the frozen mini-eval JSON (2026-07-29) as a Markdown report.
+
+Historical tooling. It reads `data/results/mini_eval_full_evaluation.json`,
+a point-in-time artefact that predates two schema changes and is deliberately
+not migrated (see EVAL_DECISION_LOG.md). In particular its `expected_tools`
+field belongs to a deterministic tool-selection metric that was removed on
+2026-08-15 and stays removed after re-examination on 2026-09-06 — the field
+exists in that file only, not in the current gold standard or evaluation
+output, and must not be taken as evidence that the metric is still in use.
+"""
+
 import json
 from pathlib import Path
 

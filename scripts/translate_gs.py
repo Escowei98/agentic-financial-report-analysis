@@ -42,6 +42,13 @@ Output ONLY a JSON object with the keys "query", "gt_value", "rationale":
     return row
 
 def main():
+    # HISTORICAL — pinned to v3 on purpose. This produced the v3 English
+    # file by full machine translation. v4's English file is maintained
+    # cell-wise instead (see gold_standard_README.md, "Correction
+    # convention"): a full re-translation would introduce drift into rows
+    # nobody touched and would discard the hand corrections of wave v4.1.
+    # Pointing this at v4 would silently clobber that file.
+    # See EVAL_DECISION_LOG.md [2026-09-06].
     in_csv = Path("data/gold_standard/gold_standard_v3.csv")
     out_csv = Path("data/gold_standard/gold_standard_v3_en.csv")
 

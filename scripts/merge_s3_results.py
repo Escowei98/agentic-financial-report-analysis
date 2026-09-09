@@ -162,6 +162,9 @@ def main():
     import scripts.run_full_eval as full_eval_script
     from src.evaluation.gold_standard_loader import load_gold_standard
 
+    # HISTORICAL — pinned to v3 on purpose: it merges the two halves of the
+    # 2026-08-15 run, both generated against v3. Do NOT switch to
+    # GOLD_STANDARD_EN. See EVAL_DECISION_LOG.md [2026-09-06].
     gold_items = load_gold_standard(PROJECT_ROOT / "data" / "gold_standard" / "gold_standard_v3_en.csv")
     full_eval_script.write_summary_csv(results, OUT_DIR / "full_eval_summary.csv")
     full_eval_script.write_per_query_csv(results, gold_items, OUT_DIR / "full_eval_per_query.csv")

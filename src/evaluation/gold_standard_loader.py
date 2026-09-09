@@ -5,14 +5,36 @@ Supports both schemas:
   - v2 (frozen): notebooks/experiments/sys1_rag_monolith/ablation_test_data_v2.csv
                  8 columns, semicolon-delimited; freetext source field;
                  4 fragetypes (Single/Cross-Sec/Multi-Year/Multi-Comp).
-  - v3 (current): data/gold_standard/gold_standard_v3.csv
-                  14 columns, semicolon-delimited; canonical source IDs;
-                  5 fragetypes (FA-1..FA-4 + FA-Refusal).
+  - v3 (frozen): data/gold_standard/gold_standard_v3.csv
+                 14 columns, semicolon-delimited; canonical source IDs;
+                 5 fragetypes (FA-1..FA-4 + FA-Refusal).
+  - v4 (frozen):  data/gold_standard/gold_standard_v4.csv
+                  v3 plus `doc_id_groups` (acceptable citation sources per
+                  required fact) and `window_class` (FA-3 within/cross
+                  document window).
+  - v5 (frozen):  data/gold_standard/gold_standard_v5.csv
+                  v4 plus `refusal_evidence` and `gt_correction`, the two
+                  columns the subtype-conditioned refusal scoring needs.
+                  Metadata-only: no question and no ground-truth value
+                  differs from v4 (see scripts/build_gold_standard_v5.py),
+                  so answers stored from a v4 run stay scoreable against v5.
+  - v6 (current): data/gold_standard/gold_standard_v6.csv
+                  v5 plus `reference_decomposition`, the required
+                  sub-questions Dimension 3 of the reasoning metric scores
+                  coverage against. Metadata-only under the same guarantee,
+                  enforced by scripts/build_gold_standard_v6.py.
 
-Schema is auto-detected from the CSV header. v2 fields without a v3
-counterpart stay as None on v3 entries; v3 fields without a v2 counterpart
-are filled with sensible defaults when loading v2 (so consumers can rely
-on the unified GoldStandardItem dataclass either way).
+    Deliberately NOT part of any schema: an `expected_tools` column. A
+    deterministic tool-selection metric was removed on 2026-08-15 in favour of
+    the Agentic Score's judge dimension; that dimension then failed human
+    validation at kappa 0.03 and was itself removed on 2026-09-08. Tool
+    selection is now out of scope, deliberately and on the record — see
+    EVAL_DECISION_LOG.md and REASONING_QUALITY_SPEC.md section 11.
+
+Schema is auto-detected from the CSV header. v2 fields without a v3/v4
+counterpart stay as None on newer entries; newer fields are filled with
+sensible defaults when loading an older file (so consumers can rely on the
+unified GoldStandardItem dataclass whichever version they load).
 
 Converts the CSV into a format compatible with RAGAS evaluation:
 question, ground_truth, doc_refs, query_type.
@@ -24,6 +46,31 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+_PROJECT_ROOT = Path(__file__).resolve().parents[2]
+_GS_DIR = _PROJECT_ROOT / "data" / "gold_standard"
+
+# --- The canonical gold standard -------------------------------------------
+#
+# Import these instead of spelling the filename out. Nine scripts each held
+# their own literal path, and when the corpus and the dataset moved to v4 on
+# 2026-09-06 not one of them followed: the whole run pipeline, the report
+# generator and the judge-validation batch were still loading v3 — a file
+# whose FA-3 questions ask about different fiscal years and whose doc ids
+# point at filings that are not in the corpus. Nothing failed loudly, the
+# numbers were simply answers to the previous version of the dataset.
+#
+# Scripts that operate on the SAVED ARTEFACTS of an earlier run are the
+# deliberate exception and pin their own version: rescoring answers that were
+# generated for v3 questions against v4 questions would be meaningless. Those
+# scripts say so at their own path assignment.
+GOLD_STANDARD_EN = _GS_DIR / "gold_standard_v6_en.csv"
+"""English gold standard — what every system and evaluator runs against."""
+
+GOLD_STANDARD_DE = _GS_DIR / "gold_standard_v6.csv"
+"""German source of record. Hand-maintained; the English file is patched
+cell-wise to match (see data/gold_standard/gold_standard_README.md,
+"Correction convention")."""
 
 
 # Mapping between v2 query_type freetext and v3 fa_type IDs.
@@ -67,17 +114,89 @@ class GoldStandardItem:
     math_type: str = ""
     hypothesis_link: list[str] = field(default_factory=list)
 
+    # --- v4 fields ---
+    doc_id_groups: list[list[str]] = field(default_factory=list)
+    """Acceptable citation sources, grouped by the fact each one supports.
+
+    A 10-K reports prior years in comparative columns, so one fiscal year is
+    often carried by more than one filing. Each inner list holds the filings
+    that are interchangeable for one required fact; citing ANY member of a
+    group satisfies it. `doc_ids` stays the flat union for the judge prompt
+    and for pre-v4 consumers. Empty on v2/v3 files, where callers fall back
+    to `doc_ids`.
+    """
+
+    window_class: str = ""
+    """FA-3 only: 'within_window' or 'cross_window'.
+
+    Whether the item's year span fits inside a single filing's comparative
+    columns. Splits the multi-year stratum so the effect of the document
+    boundary can be read off directly instead of being inferred across
+    strata.
+    """
+
+    # --- v5 fields ---
+    refusal_evidence: str = ""
+    """FA-Refusal only: what the corpus can actually support as a response.
+
+    One of 'out_of_scope' (company/fiscal year/filing type outside the
+    corpus), 'counter_evidence' (the filings positively contradict the
+    premise), 'silent' (in scope, but the item is not reported) or
+    'underspecified' (no single company and/or fiscal year identified).
+
+    The distinction exists because a correction is only legitimate where the
+    corpus carries the counter-evidence. For a 'silent' item the sole
+    groundable statement is "the filings do not report X"; asserting that X
+    did not happen is parametric knowledge and therefore exactly the NF-1
+    violation this stratum is built to detect. Empty on answerable items and
+    on pre-v5 files.
+    """
+
+    # --- v6 fields ---
+    reference_decomposition: list[str] = field(default_factory=list)
+    """Answerable items only: the sub-questions a complete chain must cover.
+
+    The standard Dimension 3 of the reasoning metric scores against
+    (REASONING_QUALITY_SPEC.md section 8). It lives in the dataset rather
+    than in the judge prompt because a judge left to infer the required
+    sub-questions per item invents its own standard each time -- and so do
+    human raters, which is what makes completeness-style dimensions
+    disagree.
+
+    Empty on FA-Refusal items: the correct chain there is "the premise
+    cannot be checked", which has no decomposition. Also empty on pre-v6
+    files.
+    """
+
+    gt_correction: str = ""
+    """FA-Refusal only: reference text for the refusal_quality judge.
+
+    NOT a ground truth answer -- `gt_value` stays empty for every FA-Refusal
+    row, which remains the canonical signature of the stratum. This field
+    carries what a system could legitimately add beyond a bare refusal:
+    the scope boundary, the contradicting figure, or the missing
+    specification. Empty on answerable items and on pre-v5 files.
+    """
+
 
 def _detect_schema_version(header: list[str]) -> str:
-    """Return 'v3' if header matches v3 schema; 'v2' otherwise."""
+    """Return 'v5', 'v4', 'v3' or 'v2' based on the header row."""
     normalized = [h.strip() for h in header]
     if normalized and normalized[0] == "id" and "fa_type" in normalized:
-        return "v3"
+        # Each bump is identified by the one column it introduced: v6 the
+        # reference decomposition, v5 the refusal-evidence classification, v4
+        # the acceptable-source groups. Newest first, since each schema also
+        # carries every column of the one before it.
+        if "reference_decomposition" in normalized:
+            return "v6"
+        if "refusal_evidence" in normalized:
+            return "v5"
+        return "v4" if "doc_id_groups" in normalized else "v3"
     if normalized and normalized[0] in ("ID", "#") and "Typ" in normalized:
         return "v2"
     raise ValueError(
         f"Unknown CSV schema. Header: {normalized!r}. "
-        f"Expected v2 ('ID;Typ;...') or v3 ('id;fa_type;...')."
+        f"Expected v2 ('ID;Typ;...'), or v3/v4/v5/v6 ('id;fa_type;...')."
     )
 
 
@@ -116,7 +235,12 @@ def _parse_v2_row(row: dict[str, str]) -> GoldStandardItem | None:
 
 
 def _parse_v3_row(row: dict[str, str]) -> GoldStandardItem | None:
-    """Parse one v3 row into a GoldStandardItem (v2 fields are derived where possible)."""
+    """Parse one v3, v4, v5 or v6 row into a GoldStandardItem.
+
+    Handles all three schemas: every bump only adds columns, so the newer
+    fields resolve to their defaults on an older file and no separate parser
+    is needed. v2 fields are derived where possible.
+    """
     raw_id = row.get("id", "").strip()
     if not raw_id:
         return None
@@ -139,6 +263,14 @@ def _parse_v3_row(row: dict[str, str]) -> GoldStandardItem | None:
     entity_form_raw = row.get("entity_form", "").strip()
     entity_form: str | None = entity_form_raw if entity_form_raw else None
 
+    # v4 columns; absent on v3 files, where these stay empty and callers fall
+    # back to doc_ids / skip the corresponding metric.
+    doc_id_groups = [
+        [d.strip() for d in group.split("+") if d.strip()]
+        for group in row.get("doc_id_groups", "").strip().split("|")
+        if group.strip()
+    ]
+
     return GoldStandardItem(
         id=item_id,
         question=row.get("query", "").strip(),
@@ -157,6 +289,15 @@ def _parse_v3_row(row: dict[str, str]) -> GoldStandardItem | None:
         difficulty=row.get("difficulty", "medium").strip() or "medium",
         math_type=row.get("math_type", "").strip(),
         hypothesis_link=hypothesis_link,
+        doc_id_groups=doc_id_groups,
+        window_class=row.get("window_class", "").strip(),
+        refusal_evidence=row.get("refusal_evidence", "").strip(),
+        gt_correction=row.get("gt_correction", "").strip(),
+        reference_decomposition=[
+            tf.strip()
+            for tf in row.get("reference_decomposition", "").split("|")
+            if tf.strip()
+        ],
     )
 
 
@@ -166,7 +307,7 @@ def load_gold_standard(
     filter_subtype: list[str] | None = None,
     filter_answerable: bool | None = None,
 ) -> list[GoldStandardItem]:
-    """Load gold-standard Q&A pairs from a CSV (v2 or v3 schema, auto-detected).
+    """Load gold-standard Q&A pairs from a CSV (v2-v5 schema, auto-detected).
 
     Args:
         csv_path: Path to the gold standard CSV.
@@ -196,11 +337,19 @@ def load_gold_standard(
         logger.debug("Detected schema version: %s", schema_version)
 
         for row in reader:
-            item = (
-                _parse_v3_row(row)
-                if schema_version == "v3"
-                else _parse_v2_row(row)
-            )
+            # Membership test, not `!= "v2"`: a new schema version that
+            # nobody wired in here would otherwise be routed to the v2 parser,
+            # which returns None for every modern row and yields a silently
+            # empty dataset instead of an error.
+            if schema_version in ("v3", "v4", "v5", "v6"):
+                item = _parse_v3_row(row)
+            elif schema_version == "v2":
+                item = _parse_v2_row(row)
+            else:
+                raise ValueError(
+                    f"Schema version {schema_version!r} detected but no parser "
+                    f"is wired for it in load_gold_standard ({csv_path})."
+                )
             if item is None:
                 continue
 
