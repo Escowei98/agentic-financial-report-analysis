@@ -8,7 +8,7 @@ from pathlib import Path
 from src.common.config import load_config
 from src.common.ingestion import download_all_filings
 from src.evaluation.eval_runner import run_full_evaluation
-from src.evaluation.gold_standard_loader import load_gold_standard
+from src.evaluation.gold_standard_loader import GOLD_STANDARD_EN, load_gold_standard
 from src.systems.long_context.pipeline import LongContextPipeline
 from src.systems.multi_agent.pipeline import MultiAgentPipeline
 from src.systems.rag_agent.pipeline import AgentRAGPipeline
@@ -20,7 +20,7 @@ logger = logging.getLogger(__name__)
 def main():
     # 1. Load data
     PROJECT_ROOT = Path(__file__).resolve().parent.parent
-    gs_path = PROJECT_ROOT / "data" / "gold_standard" / "gold_standard_v3_en.csv"
+    gs_path = GOLD_STANDARD_EN
     filings = download_all_filings()
 
     # 2. Filter Gold Standard to the 10 mini-eval queries
@@ -34,15 +34,11 @@ def main():
 
     # 3. Load Configurations & Pipelines
     logger.info("Initializing pipelines...")
-    base_cfg = load_config(PROJECT_ROOT / "configs" / "base.yaml")
-    agent_cfg = load_config(PROJECT_ROOT / "configs" / "agent.yaml")
-    lc_cfg = load_config(PROJECT_ROOT / "configs" / "long_context.yaml")
-    ma_cfg = load_config(PROJECT_ROOT / "configs" / "multi_agent.yaml")
-
-    s1 = MonolithRAGPipeline(base_cfg)
-    s2 = AgentRAGPipeline(agent_cfg)
-    s3 = LongContextPipeline(lc_cfg)
-    s4 = MultiAgentPipeline(ma_cfg)
+    # load_config() takes a bare system name, not a path (see src/common/config.py).
+    s1 = MonolithRAGPipeline(load_config("rag_monolith"))
+    s2 = AgentRAGPipeline(load_config("rag_agent"))
+    s3 = LongContextPipeline(load_config("long_context"))
+    s4 = MultiAgentPipeline(load_config("multi_agent"))
 
     s1.build(filings)
     s2.build(filings)
@@ -142,8 +138,13 @@ def generate_markdown_report(results: dict, mini_gs: list, out_path: Path):
                 em = custom.get("exact_match", 0)
                 ar = custom.get("answer_recall", 0)
 
-                reasoning = q_res.get("reasoning_metrics", {}).get("core", {})
-                ls = reasoning.get("logical_soundness", 0)
+                reasoning = q_res.get("reasoning_metrics", {})
+                # Groundedness stands in for the reasoning column here. It is
+                # the dimension defined on the most items -- validity needs a
+                # transition and completeness a reference decomposition -- so
+                # it leaves the fewest blanks in a quick-look table. All three
+                # are in the JSON; this is a summary column, not the result.
+                grounded = reasoning.get("groundedness")
 
                 cor = "✅" if (em >= 0.8 or ar >= 0.8 or custom.get("refusal_accuracy", 0) >= 0.8) else "❌"
 
@@ -151,7 +152,7 @@ def generate_markdown_report(results: dict, mini_gs: list, out_path: Path):
                 row_tok.append(str(tok))
                 row_em.append(f"{em:.2f}")
                 row_ar.append(f"{ar:.2f}")
-                row_rea.append(f"{ls}/5")
+                row_rea.append("—" if grounded is None else f"{grounded:.2f}")
                 row_cor.append(cor)
             else:
                 row_ans.append("-")
@@ -192,15 +193,25 @@ def generate_markdown_report(results: dict, mini_gs: list, out_path: Path):
                 if custom_rat:
                     md.append(f"- *Custom Metrics*: {' | '.join(custom_rat)}")
 
-                reasoning = q_res.get("reasoning_metrics", {}).get("core", {})
-                reasoning_rats = reasoning.get("rationales", {})
-
-                ls_rat = reasoning_rats.get("logical_soundness", "")
-                if ls_rat:
-                    md.append(f"- *Logical Soundness*: {ls_rat.replace('`', '')}")
+                # One line per FAILED unit. Listing the passing ones would
+                # bury the diagnosis: on a clean chain every step is grounded
+                # and every transition valid, and that is the common case.
+                reasoning = q_res.get("reasoning_metrics", {})
+                defects = [
+                    f"Schritt {v['step']} nicht belegt ({v.get('code') or '?'})"
+                    for v in reasoning.get("step_verdicts", []) if not v.get("grounded")
+                ] + [
+                    f"Übergang auf {v['step']} nicht valide ({v.get('code') or '?'})"
+                    for v in reasoning.get("transition_verdicts", []) if not v.get("valid")
+                ] + [
+                    f"Teilfrage {v['subquestion']} nicht abgedeckt"
+                    for v in reasoning.get("subquestion_verdicts", []) if not v.get("covered")
+                ]
+                if defects:
+                    md.append(f"- *Reasoning*: {' | '.join(defects)}")
 
                 # Add a blank line if we added any rationales for this system
-                if custom_rat or ls_rat:
+                if custom_rat or defects:
                     md.append("")
 
         md.append("</details>")

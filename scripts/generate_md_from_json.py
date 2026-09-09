@@ -107,7 +107,7 @@ def main():
                 ans = ans_str.replace("\n", " ").replace("|", "\\|")
 
                 tok = q_res.get("run_metrics", {}).get("total_tokens", 0)
-                reasoning = q_res.get("reasoning_metrics", {}).get("core", {}).get("logical_soundness", 0)
+                reasoning = q_res.get("reasoning_metrics", {}).get("groundedness")
 
                 # Try to find exact match
                 em = q_res.get("custom_metrics", {}).get("exact_match", 0)
@@ -117,7 +117,7 @@ def main():
 
                 row_ans.append(ans)
                 row_tok.append(str(tok))
-                row_rea.append(f"{reasoning}/5")
+                row_rea.append("—" if reasoning is None else f"{reasoning:.2f}")
                 row_cor.append(cor)
                 row_em.append(f"{em:.2f}")
                 row_ar.append(f"{ar:.2f}")
@@ -144,10 +144,22 @@ def main():
             det = results.get(sys, {}).get("detailed_results", [])
             q_res = next((d for d in det if d["query_id"] == q_id), None)
             if q_res:
-                reasoning = q_res.get("reasoning_metrics", {}).get("core", {}).get("rationales", {})
-                if reasoning.get("logical_soundness"):
+                reasoning = q_res.get("reasoning_metrics", {})
+                # Only the failing units. A clean chain has every step
+                # grounded and every transition valid, so listing the passing
+                # ones would bury the diagnosis under the common case.
+                defects = [
+                    f"Schritt {v['step']} nicht belegt ({v.get('code') or '?'}):"
+                    f" {v.get('rationale', '')}"
+                    for v in reasoning.get("step_verdicts", []) if not v.get("grounded")
+                ] + [
+                    f"Übergang auf {v['step']} nicht valide ({v.get('code') or '?'}):"
+                    f" {v.get('rationale', '')}"
+                    for v in reasoning.get("transition_verdicts", []) if not v.get("valid")
+                ]
+                if defects:
                     md.append(f"**{sys}:**")
-                    md.append(f"- *Logical Soundness*: {reasoning.get('logical_soundness')}")
+                    md.extend(f"- {d}" for d in defects)
                     md.append("")
         md.append("</details>\n")
         md.append("---\n")
