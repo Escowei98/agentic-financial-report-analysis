@@ -290,3 +290,47 @@ class TestRerankerIntegration:
             })
 
             mock_rerank.assert_not_called()
+
+
+class TestMissOnAYearWithoutItsOwnFiling:
+    """Chunks are tagged with the filing's year, so a filter on FY2023 finds
+    nothing in a FY2020/2022/2024 corpus even though FY2023 sits in the
+    FY2024 filing's comparative columns. The miss must say so; a bare
+    "No chunks found" read as "out of corpus" to every agent."""
+
+    def test_names_the_filing_that_carries_the_year(self):
+        vs = _make_mock_vectorstore([])
+        tool = create_search_section_tool(
+            vectorstore=vs, retrieval_config=_RETRIEVAL_CFG,
+            reranker_config=_RERANKER_CFG,
+            available_fiscal_years=["2020", "2022", "2024"],
+        )
+        result = tool.invoke({"ticker": "AAPL", "fiscal_year": "2023", "section": "Financial Statements"})
+
+        assert "No filing for FY2023" in result
+        assert "FY2024" in result
+        assert "fiscal_year='2024'" in result
+        assert "No chunks found" not in result
+
+    def test_a_year_no_filing_reaches_stays_a_plain_miss(self):
+        vs = _make_mock_vectorstore([])
+        tool = create_search_section_tool(
+            vectorstore=vs, retrieval_config=_RETRIEVAL_CFG,
+            reranker_config=_RERANKER_CFG,
+            available_fiscal_years=["2020", "2022", "2024"],
+        )
+        result = tool.invoke({"ticker": "AAPL", "fiscal_year": "2017", "section": "Financial Statements"})
+
+        assert "No chunks found" in result
+
+    def test_a_miss_on_a_filing_year_is_not_rewritten(self):
+        """FY2024 exists; an empty section there is a real miss."""
+        vs = _make_mock_vectorstore([])
+        tool = create_search_section_tool(
+            vectorstore=vs, retrieval_config=_RETRIEVAL_CFG,
+            reranker_config=_RERANKER_CFG,
+            available_fiscal_years=["2020", "2022", "2024"],
+        )
+        result = tool.invoke({"ticker": "AAPL", "fiscal_year": "2024", "section": "Business"})
+
+        assert "No chunks found" in result

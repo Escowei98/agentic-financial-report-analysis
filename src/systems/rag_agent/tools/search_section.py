@@ -13,11 +13,13 @@ make targeted retrievals instead of blindly searching all chunks.
 """
 
 import logging
-from typing import Any, cast
+from typing import Any, Sequence, cast
 
 from langchain_chroma import Chroma
 from langchain_core.documents import Document
 from langchain_core.tools import tool
+
+from src.common.corpus_coverage import filings_carrying_year
 
 logger = logging.getLogger(__name__)
 
@@ -38,9 +40,27 @@ def _format_section_results(
     fiscal_year: str,
     section: str,
     sub_query: str | None,
+    available_fiscal_years: Sequence[str] = (),
 ) -> str:
     """Format section search results for LLM consumption."""
     if not docs:
+        # Chunks are tagged with the FILING's fiscal year, so a filter on a
+        # year that has no filing of its own finds nothing even though the
+        # year is reported in a later filing's comparative columns. Say
+        # which filing carries it instead of a bare miss -- otherwise the
+        # agent concludes the year is outside the corpus, which is exactly
+        # what happened to every FY2023 question before 2026-09-09. The
+        # judge is given the same fact; see src/common/corpus_coverage.py.
+        if available_fiscal_years and fiscal_year not in available_fiscal_years:
+            carrying = filings_carrying_year(fiscal_year, available_fiscal_years)
+            if carrying:
+                years = ", ".join(f"fiscal_year='{y}'" for y in carrying)
+                return (
+                    f"No filing for FY{fiscal_year} in the knowledge base. "
+                    f"FY{fiscal_year} is reported in the comparative columns of "
+                    f"the {', '.join(f'FY{y}' for y in carrying)} filing(s) -- "
+                    f"search {ticker} with {years} instead."
+                )
         return (
             f"No chunks found for {ticker} in section '{section}'. "
             f"Try using retrieve_chunks() for a broader search, "
@@ -66,6 +86,7 @@ def create_search_section_tool(
     vectorstore: Chroma,
     retrieval_config: dict,
     reranker_config: dict,
+    available_fiscal_years: Sequence[str] = (),
 ) -> Any:
     """
     Factory that creates a search_section tool bound to a specific vectorstore.
@@ -85,10 +106,15 @@ def create_search_section_tool(
             - enabled (bool): whether to apply FlashRank (default True)
             - model (str): FlashRank model name
               (default 'ms-marco-MiniLM-L-12-v2')
+        available_fiscal_years: The fiscal years that have a filing of
+            their own in the knowledge base. Used only to word a miss on a
+            year without one (see _format_section_results); empty keeps the
+            plain miss message.
 
     Returns:
         A LangChain @tool function.
     """
+    known_years = tuple(str(y) for y in available_fiscal_years)
     pre_rerank_top_k = retrieval_config.get("pre_rerank_top_k", 15)
     post_rerank_top_k = retrieval_config.get("post_rerank_top_k", 4)
     reranker_enabled = reranker_config.get("enabled", True)
@@ -114,7 +140,10 @@ def create_search_section_tool(
 
         Args:
             ticker: Company ticker symbol (e.g., 'AAPL', 'MSFT', 'AMZN', 'GOOGL').
-            fiscal_year: Fiscal year as string (e.g., '2024', '2023').
+            fiscal_year: Fiscal year of the FILING as string (e.g., '2024').
+                     A filing also reports the two prior fiscal years in its
+                     comparative columns, so pass the filing's year, not the
+                     year you are asking about.
             section: SEC 10-K section name. Must be one of:
                      'Business', 'Risk Factors', 'MD&A', 'Financial Statements',
                      'Directors and Corporate Governance'.
@@ -189,6 +218,7 @@ def create_search_section_tool(
         )
         return _format_section_results(
             final_docs, ticker_upper, fy, section, effective_sub_query,
+            available_fiscal_years=known_years,
         )
 
     return search_section

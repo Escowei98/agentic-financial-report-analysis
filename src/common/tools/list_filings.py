@@ -14,6 +14,7 @@ from typing import Any
 
 from langchain_core.tools import tool
 
+from src.common.corpus_coverage import describe_coverage
 from src.common.ingestion import ProcessedFiling
 
 logger = logging.getLogger(__name__)
@@ -34,6 +35,12 @@ def _format_filings_overview(filings: list[ProcessedFiling]) -> str:
         lines.append(f"• {m.ticker} (FY{fy})")
         lines.append(f"  Company: {m.company_name}")
         lines.append(f"  Filed: {m.filing_date}")
+        # Which fiscal years the filing REPORTS, not just which one it is
+        # for. Without this line the agents read "FY2024" as "FY2024 only"
+        # and declined FY2023 questions as out of corpus -- the judge, given
+        # the same fact, scored those as answerable. See corpus_coverage.py.
+        if fy != "unknown":
+            lines.append(f"  Coverage: {describe_coverage(fy)}")
         lines.append(f"  Sections: {', '.join(sections)}")
         lines.append("")
 

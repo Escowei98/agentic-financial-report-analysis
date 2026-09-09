@@ -17,9 +17,12 @@ from langchain_core.prompts import ChatPromptTemplate
 from langchain_google_vertexai import ChatVertexAI
 
 from src.common.answer_format_convention import ANSWER_FORMAT_CONVENTION
+from src.common.few_shot_examples import FewShotScenario, render_few_shot_examples
+from src.common.reasoning_chain_convention import REASONING_CHAIN_CONVENTION
 from src.common.config import load_config
 from src.common.ingestion import ProcessedFiling
 from src.common.llm_client import get_embeddings, get_llm
+from src.common.non_answerability_convention import NON_ANSWERABILITY_CONVENTION
 from src.common.retrieval import (
     HybridRetriever,
     build_hybrid_retriever,
@@ -31,6 +34,36 @@ from src.common.utils import RunMetrics, TokenUsage, compute_filings_hash, extra
 
 logger = logging.getLogger(__name__)
 
+def _s1_steps(scenario: FewShotScenario) -> list[str]:
+    """The monolith's idiom: no tools, read the prefixed context chunks."""
+    if scenario.key == "single_fact":
+        return ["Read the chunk(s) prefixed [AAPL, FY2024, Risk Factors] in the Context."]
+    if scenario.key == "comparison":
+        return [
+            "Read the chunk prefixed [AAPL, FY2024, Financial Statements] -> total net sales = $391,035M.",
+            "Read the chunk prefixed [MSFT, FY2024, Financial Statements] -> total revenue = $245,122M.",
+            "Subtract the two figures: 391,035 - 245,122 = 145,913.",
+        ]
+    return [
+        "Read the chunks prefixed [MSFT, FY2024, Financial Statements]; the income "
+        "statement lists FY2024, FY2023 and FY2022 side by side (chunks from the "
+        "FY2022 filing cover any year it does not show).",
+        "Extract net income for each year and compute the cumulative change from "
+        "the FY2022 and FY2024 figures.",
+    ]
+
+
+# Rendered once at import. Brace-free by construction (see few_shot_examples.py),
+# which matters here and nowhere else: this string goes through
+# ChatPromptTemplate, where a stray brace is a template variable.
+FEW_SHOT_EXAMPLES = render_few_shot_examples(
+    intro=(
+        "These examples show the expected pattern for three common query "
+        "types. Read the relevant chunks in the Context and answer from them."
+    ),
+    steps_for=_s1_steps,
+)
+
 # Standard RAG prompt — deterministic, no agentic behavior
 RAG_PROMPT = ChatPromptTemplate.from_messages([
     (
@@ -40,10 +73,18 @@ RAG_PROMPT = ChatPromptTemplate.from_messages([
         "If the context does not contain the answer, say so explicitly. "
         "Be precise with numbers — include exact figures from the filings. "
         "Each context chunk below is prefixed with its source in "
-        "[TICKER, FYYEAR, SECTION] form. Always cite the source using "
+        "[TICKER, FYYEAR, SECTION] form. FYYEAR is the fiscal year of the "
+        "filing the chunk comes from; a filing's statements also carry the two "
+        "prior fiscal years in comparative columns, so a chunk tagged FY2024 "
+        "may contain FY2023 and FY2022 figures. Always cite the source using "
         "\"({{TICKER}}, FY{{YEAR}}, {{SECTION_NAME}})\" in your answer. "
         "IMPORTANT: ALWAYS reply in English. Use standard English number formatting (e.g. 1,000.50). "
+        "\n\n## Examples\n\n"
+        + FEW_SHOT_EXAMPLES
+        + "\n\n## Output Rules\n\n"
         + ANSWER_FORMAT_CONVENTION
+        + NON_ANSWERABILITY_CONVENTION
+        + REASONING_CHAIN_CONVENTION
     ),
     (
         "human",

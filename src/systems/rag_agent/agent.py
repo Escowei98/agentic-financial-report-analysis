@@ -13,6 +13,51 @@ is System-2-specific.
 """
 
 from src.common.answer_format_convention import ANSWER_FORMAT_CONVENTION
+from src.common.few_shot_examples import (
+    COMPARISON_EXPRESSION,
+    COMPARISON_RESULT,
+    FewShotScenario,
+    render_few_shot_examples,
+)
+from src.common.reasoning_chain_convention import REASONING_CHAIN_CONVENTION
+from src.common.non_answerability_convention import NON_ANSWERABILITY_CONVENTION
+
+# ---------------------------------------------------------------------------
+#  Few-shot examples, in the retrieval agent's idiom
+# ---------------------------------------------------------------------------
+
+def _s2_steps(scenario: FewShotScenario) -> list[str]:
+    if scenario.key == "single_fact":
+        return [
+            'search_section(ticker="AAPL", fiscal_year="2024", section="Risk Factors", '
+            'sub_query="cybersecurity risks and data breaches")',
+        ]
+    if scenario.key == "comparison":
+        return [
+            'search_section(ticker="AAPL", fiscal_year="2024", section="Financial Statements", '
+            'sub_query="total net sales fiscal 2024")',
+            'search_section(ticker="MSFT", fiscal_year="2024", section="Financial Statements", '
+            'sub_query="total revenue fiscal 2024")',
+            f'calculate(expression="{COMPARISON_EXPRESSION}") -> "{COMPARISON_RESULT}"',
+        ]
+    return [
+        'search_section(ticker="MSFT", fiscal_year="2024", section="Financial Statements", '
+        'sub_query="net income fiscal 2024, 2023 and 2022")',
+        "The FY2024 income statement lists three comparative years; if a year is "
+        "missing, search the FY2022 filing the same way.",
+        'calculate(expression="(<FY2024 value> - <FY2022 value>) / <FY2022 value> * 100")',
+    ]
+
+
+FEW_SHOT_EXAMPLES = render_few_shot_examples(
+    intro=(
+        "These examples show the canonical tool-call pattern for three common "
+        "query types. Follow the same pattern when a new question matches one "
+        "of these types."
+    ),
+    steps_for=_s2_steps,
+)
+
 
 # ---------------------------------------------------------------------------
 #  System Prompt
@@ -52,25 +97,7 @@ available through your tools. NEVER make up numbers or facts.
 
 ## Examples
 
-These examples show the canonical tool-call pattern for three common query types.
-Follow the same pattern when a new question matches one of these types.
-
-### Example 1 — Single-company targeted question
-User: "What are the key cybersecurity risks Apple identifies in its FY2024 10-K?"
-→ search_section(ticker="AAPL", fiscal_year="2024", section="Risk Factors", sub_query="cybersecurity risks and data breaches")
-→ Answer: "Apple's FY2024 10-K identifies the following cybersecurity risks (AAPL, FY2024, Risk Factors): (1) ... (2) ... (3) ..."
-
-### Example 2 — Cross-company comparison with math
-User: "What is the difference in total revenue between AAPL and MSFT for FY2024?"
-→ search_section(ticker="AAPL", fiscal_year="2024", section="Financial Statements", sub_query="total net sales fiscal 2024")
-→ search_section(ticker="MSFT", fiscal_year="2024", section="Financial Statements", sub_query="total revenue fiscal 2024")
-→ calculate(expression="391035 - 245122")
-→ Answer: "AAPL FY2024 total net sales were $391,035M (AAPL, FY2024, Financial Statements); MSFT FY2024 total revenue was $245,122M (MSFT, FY2024, Financial Statements). Difference: $145,913M (~$145.9B)."
-
-### Example 3 — Exploratory / cross-document question
-User: "Which companies in the knowledge base discuss AI regulation as a risk factor?"
-→ retrieve_chunks(query="AI regulation as a risk factor")
-→ Answer: "Based on the retrieved chunks, AAPL and MSFT both discuss AI regulation as an emerging risk (AAPL, FY2024, Risk Factors); (MSFT, FY2024, Risk Factors). Specifically: ..."
+""" + FEW_SHOT_EXAMPLES + """
 
 ## Output Rules
 
@@ -79,4 +106,4 @@ User: "Which companies in the knowledge base discuss AI regulation as a risk fac
 - Always cite the source using "({TICKER}, FY{YEAR}, {SECTION_NAME})".
 - If the data doesn't contain the answer, say so explicitly.
 - Do NOT hallucinate information not found in the retrieved data.
-- """ + ANSWER_FORMAT_CONVENTION + "\n"
+- """ + ANSWER_FORMAT_CONVENTION + NON_ANSWERABILITY_CONVENTION + REASONING_CHAIN_CONVENTION + "\n"

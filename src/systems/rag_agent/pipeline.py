@@ -24,7 +24,7 @@ from langchain_google_vertexai import ChatVertexAI
 
 from src.common.agent import build_agent
 from src.common.config import load_config
-from src.common.ingestion import ProcessedFiling
+from src.common.ingestion import ProcessedFiling, fiscal_year_from_metadata
 from src.common.llm_client import get_embeddings, get_llm
 from src.common.message_parsing import parse_agent_messages
 from src.common.reflection import (
@@ -228,6 +228,12 @@ class AgentRAGPipeline:
                 vectorstore=self._vectorstore,
                 retrieval_config=retrieval,
                 reranker_config=reranker,
+                # So a miss on a year without its own filing names the
+                # filing that carries it, instead of reading as "out of
+                # corpus". See src/common/corpus_coverage.py.
+                available_fiscal_years=sorted(
+                    {fiscal_year_from_metadata(f) for f in self._filings}
+                ),
             ),
             calculate,  # Stateless tool, no factory needed
             create_list_filings_tool(filings=self._filings),
