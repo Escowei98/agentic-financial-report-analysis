@@ -12,6 +12,21 @@ Produces two files under data/results/judge_validation/:
 
 See docs/decisions/EVAL_DECISION_LOG.md [2026-08-01] for the full protocol
 (metric scope, blind protocol, trust thresholds, remediation plan).
+
+REASONING RATINGS ARE PER UNIT, NOT PER DIMENSION
+-------------------------------------------------
+The retired instrument asked for five 1-5 scores per record. It reached
+weighted kappa 0.03-0.17, and the diagnosis was not that raters disagreed
+about the chains but that an unanchored five-point scale gives them nothing to
+agree on. The rating unit is now a single step, a single transition or a
+single required sub-question, and the answer is yes or no.
+
+A record therefore no longer carries a fixed number of rating cells, so the
+three reasoning columns hold JSON maps from unit index to 0/1 rather than a
+scalar. `chain_json` and `evidence_json` carry what the rater needs to decide
+them -- the evidence being the passages THE JUDGE SAW, carried over from the
+run rather than re-fetched, so that rater and judge are answering the same
+question about the same text.
 """
 import argparse
 import csv
@@ -20,8 +35,6 @@ import json
 import random
 import re
 from pathlib import Path
-
-from src.evaluation.reasoning_evaluator import AGENTIC_SYSTEMS
 
 SYSTEM_ORDER = ["rag_monolith", "rag_agent", "long_context", "multi_agent"]
 ANON_SEED = 42
@@ -37,14 +50,29 @@ BLIND_FIELDS = [
     "ground_truth",
     "answer",
     "trajectory",
-    "logical_soundness_human",
-    "synthesis_quality_human",
-    "evidence_faithfulness_human",
-    "tool_selection_human",
-    "error_recovery_human",
+    # Item metadata, not a rating target. Needed by build_human_rating_ui.py
+    # to pick the same subtype/evidence-conditioned rubric the judge used for
+    # THIS item (see get_refusal_quality_prompt / get_evidence_clause /
+    # _classify_answer_type in custom_evaluator.py) -- none of it reveals a
+    # judge score.
+    "subtype",
+    "refusal_evidence",
+    "gt_correction",
+    "gt_unit",
+    # Reasoning material shown to the rater (not rating targets).
+    "chain_json",
+    "evidence_json",
+    "subquestions_json",
+    # Per-unit reasoning ratings: JSON maps {unit index: 0|1}, or "N/A" where
+    # the dimension does not apply (no chain, no transition, refusal item).
+    "groundedness_human",
+    "validity_human",
+    "completeness_human",
     "exact_match_human",
     "answer_recall_human",
     "refusal_accuracy_human",
+    "refusal_quality_human",
+    "over_refusal_human",
     "citation_accuracy_human",
     "notes",
 ]
@@ -59,6 +87,11 @@ def _latest_eval_json(raw_dir: Path, system_name: str) -> Path:
 
 def _anonymize_trajectory(trajectory: str) -> str:
     return TRAJECTORY_HEADER_RE.sub("## Trajectory", trajectory)
+
+
+def _open_if(applicable: object) -> str:
+    """Empty cell where the rater has something to decide, 'N/A' where not."""
+    return "" if applicable else "N/A"
 
 
 def main():
@@ -92,7 +125,6 @@ def main():
         with open(eval_path, encoding="utf-8") as f:
             data = json.load(f)
 
-        is_agentic = system_name in AGENTIC_SYSTEMS
         label = system_to_label[system_name]
 
         for item in data["detailed_results"]:
@@ -100,8 +132,20 @@ def main():
             review_id = f"R{review_counter:03d}"
 
             expected_answerable = item.get("expected_answerable", True)
-            core = item["reasoning_metrics"]["core"]
-            agentic = item["reasoning_metrics"].get("agentic")
+            reasoning = item.get("reasoning_metrics", {})
+
+            # Fail loudly rather than emit a record with no rateable cells.
+            # The first build of this sample produced 0 groundedness and 0
+            # validity cells because the evaluator was not yet writing the
+            # parsed chain into its output -- silently, since an empty chain
+            # simply yields an empty unit list further down the line.
+            if reasoning.get("chain_emitted") and not reasoning.get("steps"):
+                raise SystemExit(
+                    f"{eval_path.name}, query {item.get('query_id')}: "
+                    "reasoning_metrics reports an emitted chain but carries no "
+                    "'steps'. The run predates the fix that persists the parsed "
+                    "chain; re-run it rather than building an unrateable sample."
+                )
             custom = item["custom_metrics"]
             citation = item.get("citation_metrics")
 
@@ -113,14 +157,54 @@ def main():
                 "ground_truth": item["ground_truth"],
                 "answer": item["answer"],
                 "trajectory": _anonymize_trajectory(item.get("trajectory", "")),
-                "logical_soundness_human": "",
-                "synthesis_quality_human": "",
-                "evidence_faithfulness_human": "",
-                "tool_selection_human": "" if is_agentic else "N/A",
-                "error_recovery_human": "" if is_agentic else "N/A",
+                "subtype": item.get("subtype", ""),
+                "refusal_evidence": item.get("refusal_evidence", ""),
+                "gt_correction": item.get("gt_correction", ""),
+                "gt_unit": item.get("gt_unit", ""),
+                "chain_json": json.dumps(reasoning.get("steps", [])),
+                "evidence_json": json.dumps(reasoning.get("evidence_shown", {})),
+                "subquestions_json": json.dumps(
+                    [v.get("text", "") for v in reasoning.get("subquestion_verdicts", [])]
+                ),
+                # Open where there is something to rate, "N/A" where there is
+                # not. A chain that was never emitted has no units at all --
+                # that is a format failure, tracked as chain_emission_rate,
+                # and must not be handed to a rater as if it were a defect
+                # they could score.
+                "groundedness_human": _open_if(
+                    reasoning.get("chain_emitted")
+                    and reasoning.get("num_evidential", 0) > 0
+                ),
+                # Only transitions into an inferential step are assessable
+                # (see EVAL_DECISION_LOG.md [2026-09-09]); a chain that is all
+                # lookups has none.
+                "validity_human": _open_if(
+                    reasoning.get("chain_emitted")
+                    and any(
+                        s.get("step_index", 1) > 1
+                        and not (s.get("type") == "evidential" and s.get("loci"))
+                        for s in reasoning.get("steps", [])
+                    )
+                ),
+                "completeness_human": _open_if(
+                    reasoning.get("chain_emitted")
+                    and bool(reasoning.get("subquestion_verdicts"))
+                ),
                 "exact_match_human": "" if expected_answerable else "N/A",
                 "answer_recall_human": "" if expected_answerable else "N/A",
                 "refusal_accuracy_human": "" if not expected_answerable else "N/A",
+                # Graded 0 / 0.5 / 1.0, unlike the binary refusal_accuracy
+                # beside it: 1.0 = the defect was named, 0.5 = declined
+                # without a diagnosis, 0.0 = answered as though the question
+                # were sound. Only defined on the FA-Refusal stratum.
+                "refusal_quality_human": "" if not expected_answerable else "N/A",
+                # over_refusal is itself conditional on the automated score
+                # (custom_evaluator only asks the judge when the item was
+                # marked wrong -- a correct answer can't be a refusal), so
+                # its applicability is per-row, not per fa_type like the
+                # others. Gating on whether the judge computed a value at
+                # all does not reveal what that value is.
+                "over_refusal_human": "" if custom.get("over_refusal") is not None else "N/A",
                 "citation_accuracy_human": "" if expected_answerable else "N/A",
                 "notes": "",
             })
@@ -131,8 +215,7 @@ def main():
                 "query_id": item["query_id"],
                 "fa_type": item["fa_type"],
                 "expected_answerable": expected_answerable,
-                "judge_core": core,
-                "judge_agentic": agentic,
+                "judge_reasoning": reasoning,
                 "judge_custom": custom,
                 "judge_citation": citation,
             }
