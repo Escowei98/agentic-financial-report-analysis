@@ -271,3 +271,61 @@ def test_strict_citation_tolerates_stray_braces_around_ticker():
     assert result.method == "deterministic"
     assert result.citation_accuracy == 1.0
     assert mock_llm.invoke.call_count == 0
+
+
+class TestDocIdGroupScoring:
+    """v4's `doc_id_groups` records which filings are interchangeable for one
+    required fact. A 10-K carries the two preceding fiscal years in
+    comparative columns, so scoring the flat union marked a system down for
+    answering correctly out of fewer documents than the item lists.
+    See EVAL_DECISION_LOG.md [2026-09-06].
+    """
+
+    def _item(self, groups, doc_ids, sections=None):
+        return GoldStandardItem(
+            id=1, question="q", ground_truth="gt", doc_refs="",
+            fa_type="FA-3", expected_answerable=True,
+            doc_ids=doc_ids, doc_id_groups=groups,
+            source_sections=sections or ["item_8_income_stmt"],
+        )
+
+    def test_citing_either_member_of_a_group_satisfies_it(self):
+        item = self._item(
+            groups=[["AAPL_2020", "AAPL_2022"], ["AAPL_2024"]],
+            doc_ids=["AAPL_2020", "AAPL_2022", "AAPL_2024"],
+        )
+        answer = (
+            "Revenue rose (AAPL, FY2022, Income Statement) to "
+            "(AAPL, FY2024, Income Statement)."
+        )
+        res = evaluate_citation_accuracy(item, answer)
+        assert res.doc_recall == 1.0
+        assert res.doc_precision == 1.0
+
+    def test_missing_a_whole_group_costs_recall(self):
+        item = self._item(
+            groups=[["AAPL_2020", "AAPL_2022"], ["AAPL_2024"]],
+            doc_ids=["AAPL_2020", "AAPL_2022", "AAPL_2024"],
+        )
+        answer = "Revenue was X (AAPL, FY2024, Income Statement)."
+        res = evaluate_citation_accuracy(item, answer)
+        assert res.doc_recall == 0.5
+
+    def test_citing_an_unrelated_filing_costs_precision(self):
+        item = self._item(groups=[["AAPL_2024"]], doc_ids=["AAPL_2024"])
+        answer = (
+            "Revenue was X (AAPL, FY2024, Income Statement) and "
+            "(MSFT, FY2024, Income Statement)."
+        )
+        res = evaluate_citation_accuracy(item, answer)
+        assert res.doc_recall == 1.0
+        assert res.doc_precision == 0.5
+
+    def test_falls_back_to_flat_doc_ids_without_groups(self):
+        """v2/v3 files carry no groups; each doc id is then its own group,
+        which reduces to the previous set-overlap behaviour."""
+        item = self._item(groups=[], doc_ids=["AAPL_2024", "MSFT_2024"])
+        answer = "X (AAPL, FY2024, Income Statement)."
+        res = evaluate_citation_accuracy(item, answer)
+        assert res.doc_recall == 0.5
+        assert res.doc_precision == 1.0

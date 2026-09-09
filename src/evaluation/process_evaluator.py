@@ -76,7 +76,7 @@ def calculate_cost_per_correct_answer(
     total_cost_usd: float,
     correctness_scores: Sequence[float],
     threshold: float = 0.8
-) -> float:
+) -> float | None:
     """
     Calculate the average cost to produce a 'correct' answer.
 
@@ -86,9 +86,14 @@ def calculate_cost_per_correct_answer(
         threshold: Score threshold above which an answer is considered 'correct' (default 0.8).
 
     Returns:
-        Cost per correct answer in USD. Returns 0.0 if no answers were correct.
+        Cost per correct answer in USD, or ``None`` when no answer cleared the
+        threshold. ``None`` rather than ``0.0``: a system that got nothing
+        right has an undefined cost per correct answer, and 0.0 sorts as the
+        best value in the comparison table — the one place the number is
+        actually read. Callers must render ``None`` as "not defined", never as
+        a zero. See EVAL_DECISION_LOG.md [2026-09-06].
     """
     num_correct = sum(1 for score in correctness_scores if score >= threshold)
     if num_correct == 0:
-        return 0.0
+        return None
     return total_cost_usd / num_correct

@@ -19,10 +19,11 @@ pattern in custom_evaluator.py:
      keyword matching instead of a judge call — shrinking how often that
      (measurably noisy, see docs/decisions/EVAL_DECISION_LOG.md) fallback
      is needed at all.
-  Both deterministic tiers score against the gold-standard doc_ids/
-  source_sections with set-based Precision/Recall/F1 (doc ids reuse the
-  generic evaluate_set_overlap from process_evaluator.py; sections use a
-  citation-group-aware variant, see _score_sections).
+  Both deterministic tiers score against the gold standard with
+  Precision/Recall/F1. Both are group-aware: doc ids are scored against
+  `doc_id_groups` (a fiscal year is often carried by more than one filing,
+  citing any member of a group satisfies it — see _score_docs), and section
+  text maps to groups of section ids (see _score_sections).
   3. LLM judge fallback: only when neither deterministic tier finds any
      company/ticker mention at all (i.e. the source is genuinely
      unidentifiable via keyword matching, not just unformatted).
@@ -33,7 +34,7 @@ import re
 from dataclasses import dataclass, field
 
 from src.common.llm_client import get_judge_llm
-from src.evaluation.process_evaluator import evaluate_set_overlap
+from src.evaluation.process_evaluator import SetOverlapResult
 
 logger = logging.getLogger(__name__)
 
@@ -276,17 +277,50 @@ def _score_sections(
     return precision, recall, f1
 
 
+def _score_docs(expected_groups: list[list[str]], parsed_doc_ids: list[str]):
+    """Precision/Recall/F1 for document citations at GROUP granularity.
+
+    A 10-K carries the two preceding fiscal years in comparative columns, so
+    one required fact is often available from more than one filing. The gold
+    standard records those alternatives as `doc_id_groups`: each inner list
+    holds the filings that are interchangeable for one fact, and citing ANY
+    member satisfies it.
+
+    Scoring the flat union instead punishes a correct answer: an FA-3 item
+    listing three filings marked a system down to 2/3 recall for answering
+    correctly out of two, which is exactly what the column was added to
+    prevent. Recall counts satisfied groups; precision counts cited filings
+    that belong to some group.
+    """
+    if not expected_groups:
+        return SetOverlapResult(precision=0.0, recall=0.0, f1=0.0)
+    if not parsed_doc_ids:
+        return SetOverlapResult(precision=0.0, recall=0.0, f1=0.0)
+
+    cited = set(parsed_doc_ids)
+    satisfied = sum(1 for group in expected_groups if cited & set(group))
+    recall = satisfied / len(expected_groups)
+
+    acceptable = {d for group in expected_groups for d in group}
+    correct = len(cited & acceptable)
+    precision = correct / len(cited)
+
+    f1 = 2 * precision * recall / (precision + recall) if (precision + recall) > 0 else 0.0
+    return SetOverlapResult(precision=precision, recall=recall, f1=f1)
+
+
 def _score_deterministic(item, parsed: list[dict], tier: str = "structured") -> CitationEvalResult:
-    expected_doc_ids = list(set(item.doc_ids))
     expected_section_ids = set(item.source_sections)
 
     parsed_doc_ids = list({c["doc_id"] for c in parsed})
     section_id_sets = [c["section_ids"] for c in parsed]
     parsed_section_ids = sorted({sid for ids in section_id_sets for sid in ids})
 
-    # Doc ids are unambiguous 1:1 (ticker_year), so the generic set-based
-    # Precision/Recall/F1 helper applies directly.
-    doc_res = evaluate_set_overlap(expected_doc_ids, parsed_doc_ids)
+    # v4 records acceptable alternatives per fact in `doc_id_groups`; older
+    # files have none, and there each doc id stands alone as its own group,
+    # which reduces exactly to the previous flat set-overlap behaviour.
+    expected_groups = item.doc_id_groups or [[d] for d in sorted(set(item.doc_ids))]
+    doc_res = _score_docs(expected_groups, parsed_doc_ids)
     section_precision, section_recall, section_f1 = _score_sections(
         expected_section_ids, section_id_sets
     )
