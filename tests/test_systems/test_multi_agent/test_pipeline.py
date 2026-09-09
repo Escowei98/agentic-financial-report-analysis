@@ -171,7 +171,9 @@ class TestMultiAgentPipelineReflection:
         max_iterations_override: int | None = None,
         synthesizer_answers: list[str] | None = None,
     ):
-        pipeline = MultiAgentPipeline(config_override={"reflection_enabled": True})
+        pipeline = self._pipeline = MultiAgentPipeline(
+            config_override={"reflection_enabled": True}
+        )
         fake_build_agent, synthesizer_calls = _make_fake_build_agent(
             specialist_answer="Apple's FY2024 MD&A revenue was $391,035 million (AAPL, FY2024, MD&A).",
             synthesizer_answers=synthesizer_answers or [
@@ -193,6 +195,30 @@ class TestMultiAgentPipelineReflection:
             result = pipeline.query("What was AAPL's FY2024 MD&A revenue?")
 
         return result, synthesizer_calls
+
+    def test_verifier_receives_the_specialist_outputs_as_contexts(self):
+        """The synthesizer answers from the specialist outputs and nothing
+        else, so those are what the verifier must check against.
+
+        This used to pass the fixed string "(Specialist outputs were provided
+        to the synthesizer)" — a sentence *about* evidence instead of the
+        evidence — which left the groundedness criterion with nothing to check
+        and drove `revise` on 6 of 12 items in the 2026-09-08 reserve run.
+        See EVAL_DECISION_LOG.md [2026-09-08].
+        """
+        from src.common.reflection import ReflectionVerdict
+        self._run({
+            "raw": AIMessage(content="ok", usage_metadata={"input_tokens": 10, "output_tokens": 2, "total_tokens": 12}),
+            "parsed": ReflectionVerdict(status="accept", feedback="", issues=[]),
+            "parsing_error": None,
+        })
+
+        contexts = self._pipeline._reflection_chain.invoke.call_args[0][0]["contexts"]
+        assert "391,035 million" in contexts, (
+            "the verifier no longer sees the specialist evidence the "
+            "synthesizer actually used"
+        )
+        assert "were provided to the synthesizer" not in contexts
 
     def test_accept_verdict_finishes_after_one_synthesis_pass(self):
         from src.common.reflection import ReflectionVerdict

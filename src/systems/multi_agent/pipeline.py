@@ -357,10 +357,30 @@ class MultiAgentPipeline:
         draft_answer = state["final_answer"]
         tool_calls = state.get("tool_calls_log", [])
 
+        # The specialist outputs ARE the evidence the synthesizer answered
+        # from — it sees nothing else — so they are what the verifier has to
+        # check against. This used to pass the fixed string "(Specialist
+        # outputs were provided to the synthesizer)", i.e. a sentence about
+        # evidence instead of the evidence, which left criterion 1
+        # (groundedness) with nothing to check and drove `revise` on 6 of 12
+        # items in the 2026-09-08 reserve run. They are already in state; the
+        # synthesizer node formats them the same way a few lines up.
+        outputs = state.get("specialist_outputs", {})
+        if outputs:
+            contexts = "\n\n---\n\n".join(
+                f"### Scope: {key}\n{ans}" for key, ans in outputs.items()
+            )
+        else:
+            contexts = (
+                "(No specialist outputs: the supervisor answered without "
+                "delegating, so the synthesizer had no specialist evidence "
+                "to work from.)"
+            )
+
         chain_result = self._reflection_chain.invoke({
             "question": state["user_query"],
             "answer": draft_answer,
-            "contexts": "(Specialist outputs were provided to the synthesizer)",
+            "contexts": contexts,
             "tool_calls": format_tool_calls_for_prompt(tool_calls),
         })
 

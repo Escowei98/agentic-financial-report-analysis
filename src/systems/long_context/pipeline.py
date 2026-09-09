@@ -46,6 +46,38 @@ from src.systems.long_context.prompt import build_system_prompt
 logger = logging.getLogger(__name__)
 
 
+# The reflection verifier was written for the retrieval systems, where the
+# agent's tool outputs ARE the source evidence. S3 retrieves nothing: its
+# filings sit inlined in the system prompt and never pass through the message
+# history, so the only things reaching the verifier under the heading
+# "Retrieved source contexts" are `calculate` and `list_filings` returns. On
+# the 2026-09-08 reserve run that produced `revise` on 9 of 12 items, six of
+# them with a correct answer — the verifier was reading a bare "22.4005" and
+# correctly concluding that no revenue figure was grounded in it. The two
+# items that escaped were the two with no tool call at all, where the empty
+# placeholder happened to explain the situation.
+#
+# This note restores that explanation for every item. It scopes criterion 1
+# only; the criteria that remain checkable stay in force, including the rule
+# against a refusal claiming more than the filings support.
+_REFLECTION_EVIDENCE_NOTE = (
+    "IMPORTANT — evidence basis of this system. It answers from SEC 10-K "
+    "filings inlined verbatim in its own context window and performs no "
+    "retrieval, so the source text it worked from cannot be reproduced for "
+    "you here. Whatever appears below is a tool output (a calculation, a "
+    "filing listing): a working step, not source evidence.\n\n"
+    "Consequence for criterion 1 (Groundedness): do NOT flag "
+    "'unsupported_claim' merely because the filing passage behind a figure is "
+    "missing from this section. Its absence is a property of this "
+    "architecture, not a defect of the answer. Criteria 2-4 apply unchanged — "
+    "internal numerical consistency, completeness, and whether each claim "
+    "names its source (ticker, fiscal year, section). Also unchanged: a "
+    "refusal that asserts more than the filings can support — that something "
+    "did not happen, when they are merely silent on it — is still "
+    "'unsupported_claim'."
+)
+
+
 @dataclass
 class LongContextResult:
     """Result from a single Long-Context Agent query."""
@@ -236,6 +268,7 @@ class LongContextPipeline:
                     "(no tool outputs; agent answered directly from "
                     "the inlined filings)"
                 ),
+                contexts_preamble=_REFLECTION_EVIDENCE_NOTE,
                 log_prefix="S3 ",
             )
 

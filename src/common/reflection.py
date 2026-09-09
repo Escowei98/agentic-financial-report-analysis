@@ -99,6 +99,15 @@ failure means the answer must be revised.
 3. **Completeness**: If the question has multiple parts (e.g. comparison
    of two companies, yes/no plus reasoning), all parts must be addressed.
    Flag as 'incomplete' if any sub-question is skipped.
+   A justified refusal is COMPLETE, not incomplete. When the question cannot
+   be answered from the contexts -- the data lies outside them, the question
+   assumes something they contradict, they do not report the item, or the
+   question names no single company/fiscal year -- an answer that says so and
+   names which of those applies has fully addressed the question. Do not send
+   it back for a figure the sources cannot supply. Do, however, flag as
+   'unsupported_claim' a refusal that goes further than the sources allow,
+   e.g. one asserting that something did not happen when the contexts are
+   merely silent about it.
 
 4. **Citations**: Each claim should reference its source (company ticker,
    fiscal year, section) so the user can verify. Flag as
@@ -292,6 +301,7 @@ def run_reflection_pass(
     reflection_chain: Runnable,
     recursion_limit: int,
     empty_contexts_placeholder: str,
+    contexts_preamble: str = "",
     log_prefix: str = "",
 ) -> tuple[list, ReflectionVerdict, bool, int, int]:
     """
@@ -324,6 +334,15 @@ def run_reflection_pass(
             unified, because the two systems' placeholders differ in the
             prompt text that actually reaches the verifier and changing
             either one would alter measured behaviour.
+        contexts_preamble: Text placed above the contexts block describing
+            what this architecture's tool outputs actually are. Empty for a
+            retrieval system, whose tool outputs ARE the source evidence the
+            verifier's groundedness criterion assumes. Non-empty for a
+            long-context system, whose evidence sits inlined in the system
+            prompt and never passes through here: without the preamble the
+            verifier reads a bare `calculate` result under the heading
+            "Retrieved source contexts" and necessarily concludes that
+            nothing is grounded. See EVAL_DECISION_LOG.md [2026-09-08].
         log_prefix: Optional prefix for log lines (e.g. "S3 ").
 
     Returns:
@@ -332,12 +351,18 @@ def run_reflection_pass(
     """
     draft_answer, draft_tool_calls, draft_contexts, _ = parse_agent_messages(messages)
 
+    contexts_block = (
+        "\n\n---\n\n".join(draft_contexts)
+        if draft_contexts
+        else empty_contexts_placeholder
+    )
+    if contexts_preamble:
+        contexts_block = f"{contexts_preamble}\n\n{contexts_block}"
+
     chain_result = reflection_chain.invoke({
         "question": question,
         "answer": draft_answer,
-        "contexts": "\n\n---\n\n".join(draft_contexts)
-        if draft_contexts
-        else empty_contexts_placeholder,
+        "contexts": contexts_block,
         "tool_calls": format_tool_calls_for_prompt(draft_tool_calls),
     })
     verdict, prompt_tokens, completion_tokens = unpack_reflection_result(chain_result)

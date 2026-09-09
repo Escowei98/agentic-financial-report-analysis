@@ -181,7 +181,7 @@ class TestRunReflectionPass:
         }
         return chain
 
-    def _run(self, agent, chain, messages=None, placeholder="(none)"):
+    def _run(self, agent, chain, messages=None, placeholder="(none)", preamble=""):
         from src.common.reflection import run_reflection_pass
         return run_reflection_pass(
             agent=agent,
@@ -190,6 +190,7 @@ class TestRunReflectionPass:
             reflection_chain=chain,
             recursion_limit=12,
             empty_contexts_placeholder=placeholder,
+            contexts_preamble=preamble,
         )
 
     def test_accept_verdict_does_not_reinvoke_the_agent(self):
@@ -244,3 +245,39 @@ class TestRunReflectionPass:
         assert payload["contexts"] == "42"
         assert payload["answer"] == "draft"
         assert payload["tool_calls"] == "- calculate({})"
+
+    def test_preamble_precedes_tool_outputs(self):
+        """A non-retrieval system must be able to say what its tool outputs are.
+
+        Without it the verifier reads a bare `calculate` return under the
+        heading "Retrieved source contexts" and rules every claim ungrounded —
+        the defect that drove S3's correction_rate to 0.75 on 2026-09-08.
+        """
+        from langchain_core.messages import ToolMessage
+        chain = self._chain("accept")
+        msgs = [
+            AIMessage(content="", tool_calls=[{"name": "calculate", "args": {}, "id": "c1"}]),
+            ToolMessage(content="22.4005", tool_call_id="c1"),
+            AIMessage(content="draft"),
+        ]
+        self._run(MagicMock(), chain, messages=msgs, preamble="NOTE: not source evidence.")
+        contexts = chain.invoke.call_args[0][0]["contexts"]
+        assert contexts.startswith("NOTE: not source evidence.")
+        assert "22.4005" in contexts
+
+    def test_preamble_also_precedes_the_empty_placeholder(self):
+        chain = self._chain("accept")
+        self._run(MagicMock(), chain, placeholder="(no tool outputs)", preamble="NOTE: inlined.")
+        assert chain.invoke.call_args[0][0]["contexts"] == "NOTE: inlined.\n\n(no tool outputs)"
+
+    def test_no_preamble_leaves_contexts_untouched(self):
+        """A retrieval system's tool outputs ARE the evidence — no note needed."""
+        from langchain_core.messages import ToolMessage
+        chain = self._chain("accept")
+        msgs = [
+            AIMessage(content="", tool_calls=[{"name": "retrieve_chunks", "args": {}, "id": "c1"}]),
+            ToolMessage(content="AAPL FY2024 revenue was $391,035M", tool_call_id="c1"),
+            AIMessage(content="draft"),
+        ]
+        self._run(MagicMock(), chain, messages=msgs)
+        assert chain.invoke.call_args[0][0]["contexts"] == "AAPL FY2024 revenue was $391,035M"
