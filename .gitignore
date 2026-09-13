@@ -1,52 +1,39 @@
 # Python
 __pycache__/
 *.py[cod]
-*$py.class
 *.so
 *.egg-info/
 dist/
 build/
-*.egg
 
-# Virtual Environment
+# Virtual environment
 .venv/
-venv/
-env/
 
-# Environment Variables
+# Secrets
 .env
 
-# IDE
+# IDE / OS
 .vscode/
 .idea/
 .cursor/
-*.swp
-*.swo
-
-# OS
 .DS_Store
-Thumbs.db
 
-# Data (large files — download via pipeline)
+# Tooling caches
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+.benchmarks/
+.ipynb_checkpoints/
+
+# Regenerable local artefacts
+data/vectorstores/
+data/flashrank_cache/
+notebooks/**/data/
 data/raw/
 data/processed/
 data/vectorstores/
+data/flashrank_cache/
 
-# Experiments output (optional — regeneratable)
-experiments/results/
-
-# Jupyter
-.ipynb_checkpoints/
-notebooks/.ipynb_checkpoints/
-
-# mypy
-.mypy_cache/
-
-# ruff
-.ruff_cache/
-
-.agent/
-.agents/
-
+# Working notes and thesis drafts
 docs/
-data/

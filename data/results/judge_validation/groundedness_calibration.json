@@ -1,0 +1,60 @@
+{
+  "confusion": {
+    "00": 6,
+    "01": 3,
+    "10": 2,
+    "11": 88
+  },
+  "mismatches": [
+    {
+      "system": "rag_monolith",
+      "query_id": 74,
+      "step": 2,
+      "human": 0,
+      "judge": 1,
+      "code": null,
+      "text": "Alphabet's Net income for the year ended December 31, 2024, was $59,972 million. (GOOGL, FY2024, Fin",
+      "rationale": "The passage explicitly states Alphabet's Net income as $59,972 million."
+    },
+    {
+      "system": "rag_monolith",
+      "query_id": 74,
+      "step": 3,
+      "human": 1,
+      "judge": 0,
+      "code": "B1",
+      "text": "The provided context for Amazon (AMZN, FY2024, MD&A) includes Operating Income but does not report N",
+      "rationale": "The passage does not provide any figure for Amazon's Net Income."
+    },
+    {
+      "system": "rag_agent",
+      "query_id": 74,
+      "step": 4,
+      "human": 0,
+      "judge": 1,
+      "code": null,
+      "text": "Alphabet's Net Income for FY2024 was $59,972 million. (GOOGL, FY2024, Financial Statements)",
+      "rationale": "The passage explicitly states Alphabet's Net Income for FY2024 as $59,972 million."
+    },
+    {
+      "system": "rag_agent",
+      "query_id": 81,
+      "step": 1,
+      "human": 1,
+      "judge": 0,
+      "code": "B1",
+      "text": "The `search_section` tool was used to retrieve information about \"Total Revenue\" from the \"Financial",
+      "rationale": "The step claims to have retrieved information but does not provide any specific figures or"
+    },
+    {
+      "system": "long_context",
+      "query_id": 117,
+      "step": 1,
+      "human": 0,
+      "judge": 1,
+      "code": null,
+      "text": "Amazon's effective tax rate for fiscal year 2024 was 18%. (AMZN, FY2024, MD&A)",
+      "rationale": "The passage states Amazon's effective tax rate for fiscal year 2024 as 18%."
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+system,n_obs,tokens_mean,tokens_median,tokens_p90,cost_per_query_mean_usd,cost_per_run_usd,latency_runs,latency_mean_s,latency_median_s,latency_p90_s,tool_calls_mean,tool_calls_median,tool_calls_zero_share,correction_rate,retried_share,empty_answers
+S1,450,3121.4,3030.0,3719.0,0.00143,0.2144,run2+run3,3.94,3.55,6.25,1.0,1.0,0.0,0.0,0.0022,0
+S2,450,18100.0,13687.0,31932.4,0.0062,0.9306,run2+run3,10.5,8.56,18.35,2.89,2.0,0.0711,0.0689,0.0,1
+S3,450,1389673.7,1394701.5,2096377.7,0.41776,62.6641,run2+run3,42.75,26.32,80.71,1.09,1.0,0.4244,0.1844,0.0111,6
+S4,450,147751.7,108510.5,290470.6,0.04537,6.8056,run2+run3,13.08,11.73,21.32,2.16,2.0,0.1378,0.0067,0.0,0
