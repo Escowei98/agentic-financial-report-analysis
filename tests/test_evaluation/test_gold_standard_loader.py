@@ -71,11 +71,11 @@ class TestLoadGoldStandard:
             load_gold_standard("/nonexistent/path.csv")
 
 
-# v4 = v3 plus doc_id_groups / window_class. Row 3 exercises
-# the case the schema exists for: FY2020 is reported by two filings (its own
+# Evaluation schema with doc_id_groups / window_class. Row 3 exercises
+# the case these columns exist for: FY2020 is reported by two filings (its own
 # and the FY2022 one's comparative columns), FY2024 by only one — so citing
 # either member of the first group is correct.
-SAMPLE_CSV_V4 = """\
+SAMPLE_CSV_GROUPS = """\
 id;fa_type;subtype;doc_ids;doc_id_groups;query;gt_value;gt_unit;source_sections;expected_answerable;math_type;entity_form;hypothesis_link;rationale;window_class
 1;FA-1;basis_kpi;AAPL_2024;AAPL_2024;Total revenue FY2024?;$391.0 billion;usd_billion;item_8_income_stmt;true;n/a;ticker;H1;Basis KPI;
 2;FA-Refusal;not_in_corpus;AAPL_2024;AAPL_2024;Revenue in FY2019?;;n/a;;false;n/a;name;;Out of scope;
@@ -83,44 +83,44 @@ id;fa_type;subtype;doc_ids;doc_id_groups;query;gt_value;gt_unit;source_sections;
 """
 
 
-class TestLoadGoldStandardV4:
-    """v4 schema: acceptable-source groups, capability classes, window class."""
+class TestLoadGoldStandardGroups:
+    """Acceptable-source groups and window class."""
 
     @pytest.fixture
-    def csv_v4(self, tmp_path) -> Path:
-        csv_path = tmp_path / "gold_standard_v4.csv"
-        csv_path.write_text(SAMPLE_CSV_V4, encoding="utf-8")
+    def csv_groups(self, tmp_path) -> Path:
+        csv_path = tmp_path / "gold_standard.csv"
+        csv_path.write_text(SAMPLE_CSV_GROUPS, encoding="utf-8")
         return csv_path
 
-    def test_parses_doc_id_groups(self, csv_v4):
-        item = load_gold_standard(csv_v4)[2]
+    def test_parses_doc_id_groups(self, csv_groups):
+        item = load_gold_standard(csv_groups)[2]
         assert item.doc_id_groups == [["AAPL_2020", "AAPL_2022"], ["AAPL_2024"]]
-        # The flat union stays available for pre-v4 consumers.
+        # The flat union stays available for consumers that ignore groups.
         assert item.doc_ids == ["AAPL_2020", "AAPL_2022", "AAPL_2024"]
 
-    def test_parses_window_class(self, csv_v4):
-        items = load_gold_standard(csv_v4)
+    def test_parses_window_class(self, csv_groups):
+        items = load_gold_standard(csv_groups)
         assert items[2].window_class == "cross_window"
         assert items[0].window_class == ""
 
-    def test_v3_file_still_loads_with_empty_v4_fields(self, tmp_path):
-        """A v3 file must keep working; the v4 fields default to empty."""
-        v3 = tmp_path / "v3.csv"
-        v3.write_text(
+    def test_file_without_optional_columns_loads_with_defaults(self, tmp_path):
+        """Optional columns missing from a file default to empty."""
+        minimal = tmp_path / "minimal.csv"
+        minimal.write_text(
             "id;fa_type;subtype;doc_ids;query;gt_value;gt_unit;source_sections;"
             "expected_answerable;math_type;entity_form;hypothesis_link;rationale\n"
             "1;FA-1;basis_kpi;AAPL_2024;Total revenue FY2024?;$391.0 billion;usd_billion;"
             "item_8_income_stmt;true;n/a;ticker;H1;Basis KPI\n",
             encoding="utf-8",
         )
-        item = load_gold_standard(v3)[0]
+        item = load_gold_standard(minimal)[0]
         assert item.doc_ids == ["AAPL_2024"]
         assert item.doc_id_groups == []
         assert item.window_class == ""
 
-    def test_filters_still_apply(self, csv_v4):
-        assert len(load_gold_standard(csv_v4, filter_types=["FA-3"])) == 1
-        assert len(load_gold_standard(csv_v4, filter_answerable=False)) == 1
+    def test_filters_still_apply(self, csv_groups):
+        assert len(load_gold_standard(csv_groups, filter_types=["FA-3"])) == 1
+        assert len(load_gold_standard(csv_groups, filter_answerable=False)) == 1
 
     def test_no_expected_tools_field(self):
         """There is no tool-selection column.

@@ -321,7 +321,7 @@ class TestDocIdGroupScoring:
         assert res.doc_precision == 0.5
 
     def test_falls_back_to_flat_doc_ids_without_groups(self):
-        """v2/v3 files carry no groups; each doc id is then its own group,
+        """Files without doc_id_groups (the ablation set) carry no groups; each doc id is then its own group,
         which reduces to the previous set-overlap behaviour."""
         item = self._item(groups=[], doc_ids=["AAPL_2024", "MSFT_2024"])
         answer = "X (AAPL, FY2024, Income Statement)."
