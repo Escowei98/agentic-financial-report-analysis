@@ -1,13 +1,17 @@
 """
-Shared utilities for cost tracking, timing, and logging.
+Shared utilities for cost tracking, timing, logging, and caching.
 
 Used by ALL 4 systems for consistent measurement and fair comparison.
 """
 
+from __future__ import annotations
+
+import hashlib
 import logging
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Sequence
 
 
 @dataclass
@@ -17,6 +21,19 @@ class TokenUsage:
     prompt_tokens: int = 0
     completion_tokens: int = 0
     total_tokens: int = 0
+
+
+def extract_text(content: str | list) -> str:
+    """Extracts text from LLM message content, handling both strings and lists of dicts."""
+    if isinstance(content, str):
+        return content
+    elif isinstance(content, list):
+        parts = []
+        for block in content:
+            if isinstance(block, dict) and "text" in block:
+                parts.append(block["text"])
+        return " ".join(parts)
+    return str(content)
 
 
 @dataclass
@@ -33,21 +50,26 @@ class RunMetrics:
     latency_seconds: float = 0.0
     num_steps: int = 0
     tool_calls: list[str] = field(default_factory=list)
-    corrections: int = 0  # For System 4 reviewer corrections
+    corrections: int = 0  # Correction rounds triggered by reflection (Sys2) or reviewer (Sys4)
+
+    # Optional S4 (None for S1-S3)
+    num_specialists_invoked: int | None = None
+    token_breakdown: dict[str, int] | None = None  # role -> total_tokens
 
     @property
     def estimated_cost_usd(self) -> float:
         """
-        Estimate cost based on Gemini 2.0 Flash pricing.
+        Estimate cost based on Gemini 2.5 Flash pricing (standard tier).
 
-        Pricing (as of Feb 2026):
-        - Input: $0.10 / 1M tokens (< 128k), $0.40 / 1M tokens (> 128k)
-        - Output: $0.40 / 1M tokens (< 128k), $1.60 / 1M tokens (> 128k)
+        Vertex AI standard-tier pricing:
+        - Input: $0.30 / 1M tokens
+        - Output: $2.50 / 1M tokens
 
-        Uses lower-tier pricing as a conservative estimate.
+        Matches the model configured in configs/base.yaml (gemini-2.5-flash).
+        Update both this constant and base.yaml when changing the model.
         """
-        input_cost = self.token_usage.prompt_tokens * 0.10 / 1_000_000
-        output_cost = self.token_usage.completion_tokens * 0.40 / 1_000_000
+        input_cost = self.token_usage.prompt_tokens * 0.30 / 1_000_000
+        output_cost = self.token_usage.completion_tokens * 2.50 / 1_000_000
         return input_cost + output_cost
 
 
@@ -132,3 +154,50 @@ def setup_logging(level: int = logging.INFO) -> None:
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
+
+
+# ---------------------------------------------------------------------------
+#  Caching utilities
+# ---------------------------------------------------------------------------
+
+if TYPE_CHECKING:
+    from src.common.ingestion import ProcessedFiling
+
+
+def compute_filings_hash(filings: Sequence[ProcessedFiling]) -> str:
+    """
+    Compute a deterministic SHA-256 hash for a set of filings.
+
+    The hash is derived from sorted per-filing keys so that the same set of
+    filings always produces the same hash regardless of input order. It is
+    the cache key for the vectorstore, BM25 index, and chunked documents.
+
+    Each key covers the filing's IDENTITY (ticker, accession number) *and*
+    its extracted CONTENT (section names and their text). Identity alone is
+    not enough: an accession number stays the same when a filing is
+    re-parsed, so a corpus repair would leave every cache silently serving
+    the old text to S1 and S2.
+
+    Section text is folded in as its own SHA-256 rather than concatenated,
+    so hashing stays cheap on a multi-megabyte corpus.
+
+    Args:
+        filings: Processed SEC 10-K filings.
+
+    Returns:
+        First 12 hex chars of the SHA-256 digest (short but collision-safe
+        for the expected number of distinct filing sets).
+    """
+    keys = []
+    for f in filings:
+        body = hashlib.sha256()
+        for name in sorted(f.sections):
+            body.update(name.encode())
+            body.update(b"\x00")
+            body.update(f.sections[name].encode())
+            body.update(b"\x00")
+        keys.append(
+            f"{f.metadata.ticker}:{f.metadata.accession_number}:{body.hexdigest()}"
+        )
+    digest = hashlib.sha256("|".join(sorted(keys)).encode()).hexdigest()
+    return digest[:12]

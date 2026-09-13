@@ -1,0 +1,11 @@
+# System 3: Single-Agent Long Context
+# Gemini 2.5 Flash receives all 12 processed filings inline in the
+# system prompt (~600k input tokens). No retrieval, no chunking, no
+# vectorstore. Tool set is the S2 tool set minus the retrieval tools.
+agent:
+  max_iterations: 5 # parity with rag_agent.yaml
+  recursion_limit: 12 # > 2 * max_iterations to allow for tool calls + responses
+  timeout_seconds: 120 # larger than S2: long-context calls are slower
+
+reflection:
+  enabled: true # parity with rag_agent.yaml; toggle for ablation via override

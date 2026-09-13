@@ -1,0 +1,5 @@
+system,n_items,hits_0_of_3,hits_1_of_3,hits_2_of_3,hits_3_of_3,unanimous_share,majority_correct,majority_rate,majority_from_split,answer_recall_mean_item_sd,groundedness_mean_item_sd,completeness_mean_item_sd,citation_accuracy_mean_item_sd,answer_correctness_mean_item_sd
+S1,120,94,0,0,26,1.0,26,0.2167,0,0.0048,0.0357,0.0093,0.0024,0.0093
+S2,120,17,3,7,93,0.9167,100,0.8333,7,0.0433,0.013,0.0012,0.0182,0.055
+S3,120,8,9,12,91,0.825,103,0.8583,12,0.0792,0.0717,0.0126,0.0754,0.1048
+S4,120,6,2,3,109,0.9583,112,0.9333,3,0.0217,0.0245,0.0115,0.0137,0.0564

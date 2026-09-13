@@ -1,0 +1,124 @@
+{
+  "run_id": "run3",
+  "run_index": 1,
+  "of_runs": 1,
+  "all_run_ids": [
+    "run3"
+  ],
+  "started_at": "2026-09-10T21:21:02",
+  "finished_at": "2026-09-11T01:48:50",
+  "wall_seconds": 16068.3,
+  "concurrency": "sequential",
+  "max_workers": 1,
+  "query_max_attempts": 3,
+  "git": {
+    "commit": "caf56e1a1d205077de20ba29cad01637e9cf1a1a",
+    "branch": "dev",
+    "dirty": true,
+    "dirty_files": [
+      "D  scripts/generate_md_from_json.py",
+      " M scripts/generate_report.py",
+      "D  scripts/merge_s3_results.py",
+      "D  scripts/regenerate_md.py",
+      " M scripts/run_full_eval.py",
+      "D  scripts/run_mini_eval_complete.py",
+      " M src/common/reflection.py",
+      " M src/evaluation/eval_runner.py",
+      " M tests/test_common/test_reflection.py",
+      " M tests/test_evaluation/test_eval_runner.py",
+      " M tests/test_evaluation/test_gold_standard_path_discipline.py",
+      "?? .coverage",
+      "?? scripts/aggregate_runs.py",
+      "?? scripts/flag_latency_contamination.py",
+      "?? scripts/rerun_and_merge_items.py",
+      "?? scripts/run_systems_into_run.py",
+      "?? tests/test_evaluation/test_aggregate_runs.py",
+      "?? tests/test_evaluation/test_full_eval_runs.py",
+      "?? tests/test_evaluation/test_trajectory_formatter.py"
+    ]
+  },
+  "config_sha256": {
+    "base.yaml": "18ea949bce7f1372920ac2dc8debf239d754b7aaaa51d6ae487bf9f1f3f9bc85",
+    "best_config.yaml": "7f0c6dc3da4e920ab2e7293ee93bbb28b94ebf70bd3160605df5099b09c4edf2",
+    "evaluation.yaml": "71642839213721aeb126f61b0a5fe4632f51fe64bf1425ddb58b9db90f23ef3d",
+    "long_context.yaml": "f2b39f21e78a83158252090435b8912f7bd712fabd058149b1438af5041c7cb2",
+    "multi_agent.yaml": "89fae5859349254356e694a3727a8d4b43a89c997b2b35bea04bebd5a923e5db",
+    "rag_agent.yaml": "e1073428c7914126e2f20359ba77fa96d02d0777e6e400879f2f16d31a2a6aad",
+    "rag_monolith.yaml": "fd806ad32a045f66fcb7e46138925828df3cf81a7b01678acd8146658676d58c"
+  },
+  "gold_standard": {
+    "path": "data/gold_standard/gold_standard_v6_en.csv",
+    "sha256": "921e41f493568a0ef82dd6241fb3a61c527794750e6819ede104cffa8c34481f",
+    "items_in_file": 150,
+    "items_evaluated": 150,
+    "truncated": false,
+    "limit": null
+  },
+  "corpus": {
+    "n_filings": 12,
+    "filings": [
+      "AAPL FY2020",
+      "AAPL FY2022",
+      "AAPL FY2024",
+      "AMZN FY2020",
+      "AMZN FY2022",
+      "AMZN FY2024",
+      "GOOGL FY2020",
+      "GOOGL FY2022",
+      "GOOGL FY2024",
+      "MSFT FY2020",
+      "MSFT FY2022",
+      "MSFT FY2024"
+    ]
+  },
+  "systems": {
+    "S1": {
+      "system_name": "rag_monolith",
+      "status": "ok",
+      "error": null,
+      "successful_queries": 150,
+      "failed_queries": 0,
+      "failed_query_ids": [],
+      "retried_queries": 0,
+      "retried_query_ids": {},
+      "total_cost_usd": 0.2147
+    },
+    "S2": {
+      "system_name": "rag_agent",
+      "status": "ok",
+      "error": null,
+      "successful_queries": 150,
+      "failed_queries": 0,
+      "failed_query_ids": [],
+      "retried_queries": 0,
+      "retried_query_ids": {},
+      "total_cost_usd": 0.9247
+    },
+    "S3": {
+      "system_name": "long_context",
+      "status": "ok",
+      "error": null,
+      "successful_queries": 150,
+      "failed_queries": 0,
+      "failed_query_ids": [],
+      "retried_queries": 0,
+      "retried_query_ids": {},
+      "total_cost_usd": 62.2795
+    },
+    "S4": {
+      "system_name": "multi_agent",
+      "status": "ok",
+      "error": null,
+      "successful_queries": 150,
+      "failed_queries": 0,
+      "failed_query_ids": [],
+      "retried_queries": 0,
+      "retried_query_ids": {},
+      "total_cost_usd": 6.8521
+    }
+  },
+  "total_cost_usd": 70.271,
+  "python": "3.12.1",
+  "platform": "macOS-26.6.1-arm64-arm-64bit",
+  "command": "scripts/run_full_eval.py --run-ids run3"
+}

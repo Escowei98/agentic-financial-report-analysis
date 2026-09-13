@@ -1,0 +1,484 @@
+{
+  "V001": {
+    "validity": 0.0,
+    "transition_verdicts": [
+      {
+        "step": 3,
+        "valid": false,
+        "code": "V1",
+        "rationale": "The conclusion about the overall trend does not follow from the previous steps, as the necessary figures for FY2020 are not provided."
+      }
+    ],
+    "num_steps": 3
+  },
+  "V002": {
+    "validity": 1.0,
+    "transition_verdicts": [
+      {
+        "step": 3,
+        "valid": true,
+        "code": null,
+        "rationale": "The calculation of the share of total revenue for Intelligent Cloud logically follows from the provided revenue figures."
+      },
+      {
+        "step": 4,
+        "valid": true,
+        "code": null,
+        "rationale": "The calculation of the percentage share is a valid arithmetic operation based on the previous steps."
+      }
+    ],
+    "num_steps": 4
+  },
+  "V003": {
+    "validity": 0.0,
+    "transition_verdicts": [
+      {
+        "step": 2,
+        "valid": false,
+        "code": "V1",
+        "rationale": "The step claims to calculate the share of Total Revenue but does not provide a source for the Total Net Sales figure of $637,959 million.",
+        "unsupported_values": [
+          "$637,959 million"
+        ],
+        "overruled_judge": false
+      },
+      {
+        "step": 3,
+        "valid": false,
+        "code": "V1",
+        "rationale": "The calculation relies on the Total Net Sales figure of $637,959 million, which is not sourced in the previous steps.",
+        "unsupported_values": [
+          "$637,959 million"
+        ],
+        "overruled_judge": false
+      }
+    ],
+    "num_steps": 3
+  },
+  "V004": {
+    "validity": 0.0,
+    "transition_verdicts": [
+      {
+        "step": 2,
+        "valid": false,
+        "code": "V1",
+        "rationale": "The step compares 18% to 16.4%, but the source for 18% is not provided in the chain.",
+        "unsupported_values": [
+          "18%"
+        ],
+        "overruled_judge": false
+      }
+    ],
+    "num_steps": 2
+  },
+  "V005": {
+    "validity": 1.0,
+    "transition_verdicts": [
+      {
+        "step": 3,
+        "valid": true,
+        "code": null,
+        "rationale": "The calculation of revenue growth logically follows from the provided revenue figures for FY2024 and FY2020."
+      },
+      {
+        "step": 4,
+        "valid": true,
+        "code": null,
+        "rationale": "The arithmetic calculation of revenue growth is valid based on the figures used from the previous steps."
+      }
+    ],
+    "num_steps": 4
+  },
+  "V006": {
+    "validity": 0.0,
+    "transition_verdicts": [
+      {
+        "step": 4,
+        "valid": false,
+        "code": "V1",
+        "rationale": "The step claims $93,736 million is the highest, but this figure is not stated in any previous steps."
+      },
+      {
+        "step": 5,
+        "valid": false,
+        "code": "V1",
+        "rationale": "The conclusion that Apple had the highest Net Income does not follow from the previous steps, as it does not mention Apple's Net Income."
+      }
+    ],
+    "num_steps": 5
+  },
+  "V007": {
+    "validity": 1.0,
+    "transition_verdicts": [
+      {
+        "step": 3,
+        "valid": true,
+        "code": null,
+        "rationale": "This step makes a valid distinction between operating income and revenue."
+      },
+      {
+        "step": 4,
+        "valid": true,
+        "code": null,
+        "rationale": "This step correctly identifies the absence of information regarding the International segment's revenue and AMZN's total revenue."
+      }
+    ],
+    "num_steps": 4
+  },
+  "V008": {
+    "validity": 1.0,
+    "transition_verdicts": [
+      {
+        "step": 5,
+        "valid": true,
+        "code": null,
+        "rationale": "The comparison of the values logically follows from the previously stated Net Income figures."
+      },
+      {
+        "step": 6,
+        "valid": true,
+        "code": null,
+        "rationale": "The conclusion that Alphabet Inc. had the highest Net Income follows from the comparison made in the previous step."
+      }
+    ],
+    "num_steps": 6
+  },
+  "V009": {
+    "validity": 1.0,
+    "transition_verdicts": [
+      {
+        "step": 3,
+        "valid": true,
+        "code": null,
+        "rationale": "The comparison of the two values logically follows from the stated Net Incomes."
+      },
+      {
+        "step": 4,
+        "valid": true,
+        "code": null,
+        "rationale": "The conclusion that Alphabet had the higher Net Income follows from the comparison made in the previous step."
+      }
+    ],
+    "num_steps": 4
+  },
+  "V010": {
+    "validity": 0.5,
+    "transition_verdicts": [
+      {
+        "step": 4,
+        "valid": false,
+        "code": "V1",
+        "rationale": "The step references $93,736 million without a source, making it an unsupported claim.",
+        "unsupported_values": [
+          "$93,736 million"
+        ],
+        "overruled_judge": false
+      },
+      {
+        "step": 5,
+        "valid": true,
+        "code": null,
+        "rationale": "The conclusion that Alphabet had the highest net income follows logically from the previous steps."
+      }
+    ],
+    "num_steps": 5
+  },
+  "V011": {
+    "validity": 1.0,
+    "transition_verdicts": [
+      {
+        "step": 3,
+        "valid": true,
+        "code": null,
+        "rationale": "The calculation of the share of Intelligent Cloud in total revenue logically follows from the provided revenue figures."
+      },
+      {
+        "step": 4,
+        "valid": true,
+        "code": null,
+        "rationale": "The arithmetic operation performed to calculate the share of Intelligent Cloud in total revenue is valid based on the previous steps."
+      }
+    ],
+    "num_steps": 4
+  },
+  "V012": {
+    "validity": 1.0,
+    "transition_verdicts": [
+      {
+        "step": 3,
+        "valid": true,
+        "code": null,
+        "rationale": "The calculation of total revenue growth logically follows from the figures provided in the previous steps."
+      }
+    ],
+    "num_steps": 3
+  },
+  "V013": {
+    "validity": 0.0,
+    "transition_verdicts": [
+      {
+        "step": 2,
+        "valid": false,
+        "code": "V1",
+        "rationale": "The step references FY2024 Sales ($391,035) which is not stated in any earlier step.",
+        "unsupported_values": [
+          "$391,035"
+        ],
+        "overruled_judge": false
+      },
+      {
+        "step": 3,
+        "valid": false,
+        "code": "V1",
+        "rationale": "The calculation relies on FY2024 Sales ($391,035) which is not provided in the chain.",
+        "unsupported_values": [
+          "$391,035"
+        ],
+        "overruled_judge": false
+      }
+    ],
+    "num_steps": 3
+  },
+  "V014": {
+    "validity": 1.0,
+    "transition_verdicts": [
+      {
+        "step": 3,
+        "valid": true,
+        "code": null,
+        "rationale": "The calculation of the operating margin for FY2020 follows logically from the provided operating income and total net sales."
+      },
+      {
+        "step": 6,
+        "valid": true,
+        "code": null,
+        "rationale": "The calculation of the operating margin for FY2022 follows logically from the provided operating income and total net sales."
+      },
+      {
+        "step": 9,
+        "valid": true,
+        "code": null,
+        "rationale": "The calculation of the operating margin for FY2024 follows logically from the provided operating income and total net sales."
+      },
+      {
+        "step": 10,
+        "valid": true,
+        "code": null,
+        "rationale": "The conclusion about the overall trend in operating margins is supported by the calculated margins for each fiscal year."
+      }
+    ],
+    "num_steps": 11
+  },
+  "V015": {
+    "validity": 1.0,
+    "transition_verdicts": [
+      {
+        "step": 4,
+        "valid": true,
+        "code": null,
+        "rationale": "The calculation of total net sales follows logically from the provided operating expenses and their percentage of total net sales."
+      },
+      {
+        "step": 5,
+        "valid": true,
+        "code": null,
+        "rationale": "The definition of Operating Margin and its calculation from operating income and total net sales is valid."
+      },
+      {
+        "step": 6,
+        "valid": true,
+        "code": null,
+        "rationale": "The conclusion about the Operating Margin follows correctly from the previous calculation."
+      }
+    ],
+    "num_steps": 6
+  },
+  "V016": {
+    "validity": 0.0,
+    "transition_verdicts": [
+      {
+        "step": 2,
+        "valid": false,
+        "code": "V1",
+        "rationale": "The conclusion about Amazon's effective tax rate not being available does not follow from the previous step, which only provides information about Alphabet.",
+        "unsupported_values": [
+          "Amazon's effective tax rate (nowhere)"
+        ],
+        "overruled_judge": false
+      }
+    ],
+    "num_steps": 2
+  },
+  "V017": {
+    "validity": 1.0,
+    "transition_verdicts": [
+      {
+        "step": 2,
+        "valid": true,
+        "code": null,
+        "rationale": "The calculation of the share of Intelligent Cloud revenue as a percentage of total revenue logically follows from the figures provided in step 1."
+      },
+      {
+        "step": 3,
+        "valid": true,
+        "code": null,
+        "rationale": "The calculation of 42.98% as the share of Intelligent Cloud revenue is a valid arithmetic operation based on the figures from step 1."
+      }
+    ],
+    "num_steps": 3
+  },
+  "V018": {
+    "validity": 1.0,
+    "transition_verdicts": [
+      {
+        "step": 4,
+        "valid": true,
+        "code": null,
+        "rationale": "The conclusion that net income for FY2023 is not reported follows logically from the previous steps."
+      }
+    ],
+    "num_steps": 4
+  },
+  "V019": {
+    "validity": 0.0,
+    "transition_verdicts": [
+      {
+        "step": 2,
+        "valid": false,
+        "code": "V1",
+        "rationale": "The step compares $100,118 million to $93,736 million, but $93,736 million is not sourced from any earlier step.",
+        "unsupported_values": [
+          "$93,736 million"
+        ],
+        "overruled_judge": false
+      },
+      {
+        "step": 3,
+        "valid": false,
+        "code": "V1",
+        "rationale": "The conclusion that Alphabet had the higher net income relies on the unsupported value of $93,736 million.",
+        "unsupported_values": [
+          "$93,736 million"
+        ],
+        "overruled_judge": false
+      }
+    ],
+    "num_steps": 3
+  },
+  "V020": {
+    "validity": 1.0,
+    "transition_verdicts": [
+      {
+        "step": 3,
+        "valid": true,
+        "code": null,
+        "rationale": "The step defines how to calculate operating margin without relying on any specific figures."
+      },
+      {
+        "step": 4,
+        "valid": true,
+        "code": null,
+        "rationale": "The step correctly uses the operating income and total net sales to calculate the operating margin."
+      },
+      {
+        "step": 5,
+        "valid": true,
+        "code": null,
+        "rationale": "The conclusion about Apple's operating margin in FY2023 follows logically from the calculated value in the previous step."
+      }
+    ],
+    "num_steps": 5
+  },
+  "V021": {
+    "validity": 0.5,
+    "transition_verdicts": [
+      {
+        "step": 2,
+        "valid": true,
+        "code": null,
+        "rationale": "The step defines the calculation of the Debt/Equity Ratio without relying on any prior values."
+      },
+      {
+        "step": 3,
+        "valid": false,
+        "code": "V1",
+        "rationale": "The step uses the figure for Total Liabilities, which is not stated in any earlier step.",
+        "unsupported_values": [
+          "125172"
+        ],
+        "overruled_judge": false
+      }
+    ],
+    "num_steps": 3
+  },
+  "V022": {
+    "validity": 0.0,
+    "transition_verdicts": [
+      {
+        "step": 2,
+        "valid": false,
+        "code": "V1",
+        "rationale": "The step calculates growth percentage but does not provide the FY2024 revenue figure, making the conclusion unsupported.",
+        "unsupported_values": [
+          "$FY2024 Revenue"
+        ],
+        "overruled_judge": false
+      }
+    ],
+    "num_steps": 3
+  },
+  "V023": {
+    "validity": 1.0,
+    "transition_verdicts": [
+      {
+        "step": 2,
+        "valid": true,
+        "code": null,
+        "rationale": "The calculation of operating margin for FY2020 follows logically from the provided operating income and total net sales."
+      },
+      {
+        "step": 5,
+        "valid": true,
+        "code": null,
+        "rationale": "The calculation of operating margin for FY2021 follows logically from the provided operating income and total net sales."
+      },
+      {
+        "step": 8,
+        "valid": true,
+        "code": null,
+        "rationale": "The calculation of operating margin for FY2022 follows logically from the provided operating income and total net sales."
+      },
+      {
+        "step": 11,
+        "valid": true,
+        "code": null,
+        "rationale": "The calculation of operating margin for FY2023 follows logically from the provided operating income and total net sales."
+      },
+      {
+        "step": 14,
+        "valid": true,
+        "code": null,
+        "rationale": "The calculation of operating margin for FY2024 follows logically from the provided operating income and total net sales."
+      },
+      {
+        "step": 15,
+        "valid": true,
+        "code": null,
+        "rationale": "The conclusion about the overall trend in operating margins is supported by the year-by-year calculations."
+      }
+    ],
+    "num_steps": 15
+  },
+  "V024": {
+    "validity": 1.0,
+    "transition_verdicts": [
+      {
+        "step": 4,
+        "valid": true,
+        "code": null,
+        "rationale": "The conclusion about the Total Revenue of GOOGL in FY2022 logically follows from the stated revenue figure in the previous step."
+      }
+    ],
+    "num_steps": 4
+  }
+}

@@ -1,12 +1,20 @@
-# System 1: Simple RAG (Monolith) — Chunking + Vector Store
+# System 1: Simple RAG (Monolith) — Chunking + Hybrid Retrieval + Reranking
 chunking:
-  strategy: "recursive"       # RecursiveCharacterTextSplitter
-  chunk_size: 1000            # Characters per chunk
-  chunk_overlap: 200          # Overlap between chunks
+  strategy: "recursive" # RecursiveCharacterTextSplitter
+  chunk_size: 1000 # Optuna best value
+  chunk_overlap_pct: 0.10 # Optuna best value
 
 retrieval:
-  top_k: 5                    # Number of chunks to retrieve
-  search_type: "similarity"   # similarity | mmr
+  mode: "hybrid" # BM25 + Dense (EnsembleRetriever)
+  bm25_weight: 0.5 # Optuna best value
+  dense_weight: 0.5 # = 1 - bm25_weight
+  pre_rerank_top_k: 15 # Optuna best value
+  post_rerank_top_k: 4 # Optuna best value
+
+reranker:
+  enabled: true
+  provider: "flashrank"
+  model: "ms-marco-MiniLM-L-12-v2"
 
 vectorstore:
   provider: "chromadb"

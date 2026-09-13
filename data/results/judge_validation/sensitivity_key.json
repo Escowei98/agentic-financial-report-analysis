@@ -1,0 +1,170 @@
+{
+  "V001": {
+    "perturbed": true,
+    "source_system": "multi_agent",
+    "source_query_id": 44,
+    "removed_step_index": 1,
+    "removed_step_text": "Apple's Operating Margin for FY2020 was 24.15%. (AAPL, FY2020, Financial Statements)"
+  },
+  "V002": {
+    "perturbed": false,
+    "source_system": "rag_monolith",
+    "source_query_id": 27,
+    "removed_step_index": null,
+    "removed_step_text": null
+  },
+  "V003": {
+    "perturbed": true,
+    "source_system": "rag_agent",
+    "source_query_id": 91,
+    "removed_step_index": 1,
+    "removed_step_text": "Total Net Sales for AMZN in FY2024 were $637,959 million. (AMZN, FY2024, Financial Statements)"
+  },
+  "V004": {
+    "perturbed": true,
+    "source_system": "long_context",
+    "source_query_id": 117,
+    "removed_step_index": 1,
+    "removed_step_text": "Amazon's effective tax rate for fiscal year 2024 was 18%. (AMZN, FY2024, MD&A)"
+  },
+  "V005": {
+    "perturbed": false,
+    "source_system": "rag_agent",
+    "source_query_id": 52,
+    "removed_step_index": null,
+    "removed_step_text": null
+  },
+  "V006": {
+    "perturbed": true,
+    "source_system": "rag_agent",
+    "source_query_id": 74,
+    "removed_step_index": 1,
+    "removed_step_text": "Apple's Net Income for FY2024 was $93,736 million. (AAPL, FY2024, Financial Statements)"
+  },
+  "V007": {
+    "perturbed": false,
+    "source_system": "rag_monolith",
+    "source_query_id": 91,
+    "removed_step_index": null,
+    "removed_step_text": null
+  },
+  "V008": {
+    "perturbed": false,
+    "source_system": "multi_agent",
+    "source_query_id": 74,
+    "removed_step_index": null,
+    "removed_step_text": null
+  },
+  "V009": {
+    "perturbed": false,
+    "source_system": "multi_agent",
+    "source_query_id": 119,
+    "removed_step_index": null,
+    "removed_step_text": null
+  },
+  "V010": {
+    "perturbed": true,
+    "source_system": "long_context",
+    "source_query_id": 74,
+    "removed_step_index": 1,
+    "removed_step_text": "Apple Inc.'s net income for FY2024 was $93,736 million. (AAPL, FY2024, Financial Statements)"
+  },
+  "V011": {
+    "perturbed": false,
+    "source_system": "rag_agent",
+    "source_query_id": 27,
+    "removed_step_index": null,
+    "removed_step_text": null
+  },
+  "V012": {
+    "perturbed": false,
+    "source_system": "multi_agent",
+    "source_query_id": 52,
+    "removed_step_index": null,
+    "removed_step_text": null
+  },
+  "V013": {
+    "perturbed": true,
+    "source_system": "rag_agent",
+    "source_query_id": 41,
+    "removed_step_index": 1,
+    "removed_step_text": "Apple's total net sales for FY2024 were $391,035 million. (AAPL, FY2024, Financial Statements)"
+  },
+  "V014": {
+    "perturbed": false,
+    "source_system": "rag_agent",
+    "source_query_id": 44,
+    "removed_step_index": null,
+    "removed_step_text": null
+  },
+  "V015": {
+    "perturbed": false,
+    "source_system": "rag_monolith",
+    "source_query_id": 24,
+    "removed_step_index": null,
+    "removed_step_text": null
+  },
+  "V016": {
+    "perturbed": true,
+    "source_system": "rag_monolith",
+    "source_query_id": 117,
+    "removed_step_index": 1,
+    "removed_step_text": "The provided context does not contain any information regarding Amazon's effective tax rate for FY2024."
+  },
+  "V017": {
+    "perturbed": true,
+    "source_system": "long_context",
+    "source_query_id": 27,
+    "removed_step_index": 1,
+    "removed_step_text": "Microsoft's total revenue for FY2024 was $245,122 million (MSFT, FY2024, MD&A)."
+  },
+  "V018": {
+    "perturbed": false,
+    "source_system": "rag_monolith",
+    "source_query_id": 20,
+    "removed_step_index": null,
+    "removed_step_text": null
+  },
+  "V019": {
+    "perturbed": true,
+    "source_system": "rag_agent",
+    "source_query_id": 119,
+    "removed_step_index": 1,
+    "removed_step_text": "Apple's Net Income for FY2024 was $93,736 million. (AAPL, FY2024, Financial Statements)"
+  },
+  "V020": {
+    "perturbed": false,
+    "source_system": "long_context",
+    "source_query_id": 24,
+    "removed_step_index": null,
+    "removed_step_text": null
+  },
+  "V021": {
+    "perturbed": true,
+    "source_system": "rag_agent",
+    "source_query_id": 18,
+    "removed_step_index": 1,
+    "removed_step_text": "Total Liabilities for Alphabet in FY2024 were $125,172 million. (GOOGL, FY2024, Financial Statements)"
+  },
+  "V022": {
+    "perturbed": true,
+    "source_system": "long_context",
+    "source_query_id": 52,
+    "removed_step_index": 1,
+    "removed_step_text": "Amazon's total net sales in FY2024 were $637,959 million (AMZN, FY2024, MD&A)."
+  },
+  "V023": {
+    "perturbed": true,
+    "source_system": "long_context",
+    "source_query_id": 44,
+    "removed_step_index": 1,
+    "removed_step_text": "Operating income for AAPL in FY2020 was $66,288 million. (AAPL, FY2020, Financial Statements)"
+  },
+  "V024": {
+    "perturbed": false,
+    "source_system": "rag_monolith",
+    "source_query_id": 81,
+    "removed_step_index": null,
+    "removed_step_text": null
+  }
+}

@@ -39,6 +39,17 @@ def load_config(system_name: str | None = None) -> dict:
 
     # Merge system-specific config
     if system_name:
+        # Guard against being handed a path instead of a bare system name.
+        # `CONFIGS_DIR / f"{a_path}.yaml"` silently resolves to a
+        # non-existent file, the merge below is skipped, and every caller
+        # then runs on base.yaml alone — which is how the first full n=150
+        # run ended up with S1 and S2 on diverging built-in defaults.
+        # Failing loudly is the only safe behaviour here.
+        if os.sep in str(system_name) or str(system_name).endswith(".yaml"):
+            raise ValueError(
+                f"load_config() expects a bare system name (e.g. 'rag_agent'), "
+                f"not a path: {system_name!r}. It resolves configs/<name>.yaml itself."
+            )
         system_path = CONFIGS_DIR / f"{system_name}.yaml"
         if system_path.exists():
             with open(system_path, encoding="utf-8") as f:
@@ -46,8 +57,10 @@ def load_config(system_name: str | None = None) -> dict:
             config = _deep_merge(config, system_config)
 
     # Inject environment variables
-    config["google_api_key"] = os.getenv("GOOGLE_API_KEY", "")
+    config["google_cloud_project"] = os.getenv("GOOGLE_CLOUD_PROJECT", "")
+    config["google_cloud_location"] = os.getenv("GOOGLE_CLOUD_LOCATION", "global")
     config["sec_edgar_email"] = os.getenv("SEC_EDGAR_EMAIL", "")
+    config["openai_api_key"] = os.getenv("OPENAI_API_KEY", "")
 
     return config
 

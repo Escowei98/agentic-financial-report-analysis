@@ -14,26 +14,45 @@ dependencies = [
     # LangChain ecosystem
     "langchain>=0.3",
     "langgraph>=0.2",
-    "langchain-google-genai>=2.0",
+    "langchain-google-vertexai>=2.0",
     "langchain-chroma>=0.2",
     "langchain-text-splitters>=0.3",
     # Google Gemini
-    "google-genai>=1.0",
+    "google-cloud-aiplatform>=1.60",
     # SEC EDGAR data access
     "edgartools>=3.0",
+    # Robust retry with exponential backoff
+    "tenacity>=8.0",
+    # SEC SGML filing parser (handles older filing formats)
+    "datamule>=0.5",
+    # Explicit transitive deps (currently via edgartools)
+    "httpx>=0.27",
+    "lxml>=5.0",
     # Vector store
     "chromadb>=0.5",
     # Evaluation
     "ragas>=0.2",
+    # OpenAI (used only as the evaluation judge model, decoupled from the
+    # Gemini models under test — mitigates same-model self-preference bias)
+    "langchain-openai>=0.2",
+    # Ablation Study: Hybrid Retrieval + Reranking + Optimization
+    "rank-bm25>=0.2",
+    "langchain-cohere>=0.3",
+    "optuna>=4.0",
+    "matplotlib>=3.8",
+    "scikit-learn>=1.3",
     # Configuration & environment
     "python-dotenv>=1.0",
     "pyyaml>=6.0",
     "pydantic>=2.0",
     "pydantic-settings>=2.0",
+    "flashrank>=0.2.10",
+    # Safe math expression evaluator (System 2 calculate tool)
+    "simpleeval>=1.0",
 ]
 
 [dependency-groups]
-dev = ["pytest>=8.0", "ruff>=0.8", "mypy>=1.13", "jupyter>=1.0", "ipykernel>=6.0"]
+dev = ["pytest>=8.0", "ruff>=0.8", "mypy>=1.13", "jupyter>=1.0", "ipykernel>=6.0", "pandas-stubs>=2.0"]
 
 [tool.ruff]
 line-length = 120
@@ -50,3 +69,12 @@ pythonpath = ["."]
 python_version = "3.12"
 warn_return_any = true
 warn_unused_configs = true
+
+# Third-party libraries without inline types or a stubs package on PyPI.
+# (lxml has a stubs package, but its `.xpath()` return type is a huge, overly
+# generic union — the site accessing it always trusts specific, known-shape
+# XPath results, so treating it as untyped avoids type-narrowing noise that
+# wouldn't catch real bugs.)
+[[tool.mypy.overrides]]
+module = ["edgar.*", "simpleeval.*", "lxml.*", "rank_bm25.*", "flashrank.*"]
+ignore_missing_imports = true

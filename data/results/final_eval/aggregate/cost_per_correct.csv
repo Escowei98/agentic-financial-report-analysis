@@ -1,0 +1,5 @@
+system,cost_per_run_usd,correct_per_run,cost_per_correct_usd_mean,cost_per_correct_usd_sd
+S1,0.2144,50.33,0.00426,6e-05
+S2,0.9306,123,0.00757,0.00016
+S3,62.6641,121,0.51808,0.01382
+S4,6.8056,135.67,0.05017,0.00057
