@@ -1,101 +1,83 @@
 # Agentic Financial Report Analysis
 
-Dieses Projekt ist Teil einer Masterarbeit mit dem Ziel, vier verschiedene Architekturansätze zur Analyse von SEC EDGAR 10-K Finanzberichten zu entwerfen und vergleichend zu evaluieren. Im Zentrum steht die Forschungsfrage, ob agentenbasierte Systeme mit großem Kontext (Long-Context) klassische RAG-Baselines bei komplexen finanziellen Analyseaufgaben und Querverweisen besser abschneiden.
+Code und Ergebnisse zur Masterarbeit über den Vergleich von vier Architekturen zur Beantwortung von Fragen zu SEC-10-K-Berichten. Untersucht wird, ob agentenbasierte und Long-Context-Systeme klassische RAG-Pipelines bei dokument- und abschnittsübergreifenden Finanzanalysen übertreffen.
 
-## Architekturen der 4 Systeme
+## Systeme
 
-Die Repository-Struktur hält diese vier Systeme strikt voneinander getrennt:
+| | System | Kurzbeschreibung | Code |
+|---|---|---|---|
+| S1 | RAG-Monolith | Feste Pipeline: Hybrid-Retrieval (BM25 + Embeddings), FlashRank-Reranking, Generierung | `src/systems/rag_monolith/` |
+| S2 | Single-Agent RAG | ReAct-Agent mit `search_section`, `retrieve_chunks`, `calculate`, `list_filings` und Reflexion | `src/systems/rag_agent/` |
+| S3 | Single-Agent Long Context | Alle 12 Berichte im Kontextfenster, Werkzeuge `calculate` und `list_filings`, Reflexion | `src/systems/long_context/` |
+| S4 | Multi-Agent Long Context | LangGraph: Supervisor, parametrisierte Specialists, Synthesizer, Reflexion | `src/systems/multi_agent/` |
 
-1. **System 1: Simple RAG (Monolith)** - Klassischer Retrieve -> Build Context -> Answer Ansatz ohne Agenten.
-2. **System 2: Single-Agent RAG** - Ein Agent, der gezielt Werkzeuge (wie Retrieval) nutzt.
-3. **System 3: Single-Agent Long Context** - Nutzt extrem große Kontextfenster (wie Gemini 1.5 Pro) komplett ohne vorgeschaltetes Retrieval.
-4. **System 4: Multi-Agent Long Context** - Ein komplexes System (z. B. via LangGraph) aus mehreren spezialisierten Agenten-Rollen (Analyst, Reviewer).
+Alle Systeme nutzen `gemini-2.5-flash` und dieselben geteilten Komponenten aus `src/common/` (Antwortformat-, Nicht-Beantwortbarkeits- und Begründungsketten-Konvention, Few-Shot-Szenarien, Werkzeuge). Bewertet wird mit `gpt-4o-mini` als Judge aus einer anderen Modellfamilie.
 
-Zusätzlich gibt es eine zentrale Daten-Pipeline im `data` und `src/common/` Bereich zum normalisierten Parsen der EDGAR 10-K HTML-Dokumente in analysierbares Markdown.
+## Repository-Struktur
 
----
-
-## Voraussetzungen
-
-- **OS:** Windows 10/11, macOS oder Linux.
-- **Python:** >= 3.10
-- **uv:** Dieses Projekt nutzt [uv](https://github.com/astral-sh/uv) für blitzschnelles Dependency-Management.
-- **API-Keys:**
-  - Einen Key für die **Google Gemini API**, da das Projekt Modelle der Gemini-Familie als Standard nutzt.
-
----
-
-## Setup & Installation
-
-### 1. Repository klonen
-
-```bash
-git clone <dein-repository-url>
-cd agentic-financial-report-analysis
+```
+configs/          Systemkonfiguration (base.yaml), Judge (evaluation.yaml), S1-Hyperparameter (best_config.yaml)
+src/common/       Ingestion, Chunking, Retrieval, LLM-Clients, geteilte Konventionen und Werkzeuge
+src/systems/      Die vier Systeme; S1 inkl. Optuna-Ablation
+src/evaluation/   Gold-Standard-Loader, RAGAS, eigene Metriken, Zitationsgenauigkeit, Begründungsketten-Metrik
+scripts/          Evaluationsläufe, Aggregation, Statistik, Abbildungen, Judge-Validierung, Datenprüfung
+data/             Gold Standard, Evaluationsergebnisse, Optuna-Studie
+notebooks/        Showcases (Datenpipeline, S1, S2) und die S1-Ablation
+tests/            pytest-Suite
 ```
 
-### 2. Projektumgebung einrichten (mit uv)
+### Daten
 
-Falls du `uv` noch nicht installiert hast, installiere es in deiner Konsole:
+- `data/gold_standard/` — Gold Standard v6.1: 150 Fragen in fünf Strata (FA-1 bis FA-4, FA-Refusal), deutsch und englisch. Schema und Konventionen: [gold_standard_README.md](data/gold_standard/gold_standard_README.md).
+- `data/results/final_eval/run1–run3/` — die drei Evaluationsläufe: Rohdaten je System (`eval_<system>_*.json`), Reports, Lauf-Log, Provenienz und Latenz-Kontamination.
+- `data/results/final_eval/aggregate/` — Mittelwerte über die Läufe, Hypothesentests, explorative Vergleiche, Stratum- und Refusal-Auswertungen.
+- `data/results/final_eval/refusal_hand_rating/` — blinde Handbewertung des Refusal-Stratums (run2).
+- `data/results/judge_validation/` — Judge-Validierung: Reserve-Stichprobe, menschliche Bewertungen, Validierungsreport, Sensitivitätstest der Validity-Dimension.
+- `data/raw/`, `data/processed/` — der Korpus (AAPL, MSFT, AMZN, GOOGL × FY2020/2022/2024); nicht versioniert, wird von der Ingestion aus SEC EDGAR erzeugt.
+- `data/vectorstores/`, `data/flashrank_cache/` — lokale, regenerierbare Caches (nicht versioniert).
 
-- **Windows:** `powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"`
-- **Mac/Linux:** `curl -LsSf https://astral.sh/uv/install.sh | sh`
+## Setup
 
-Synchronisiere danach die Abhängigkeiten aus der `uv.lock`/`pyproject.toml` (dieser Befehl lädt die nötige Python Version und erstellt automatisch eine virtuelle Umgebung unter `.venv`):
+Voraussetzungen: Python 3.12 und [uv](https://github.com/astral-sh/uv).
 
 ```bash
 uv sync
+cp .env.example .env
 ```
 
-_(Alternativ auf Linux/Mac: Mach das Skript über `chmod +x` ausführbar falls noch Shell-Files existieren sollten)._
+In `.env` einzutragen:
 
-### 3. Umgebungsvariablen und Google API Key konfigurieren
+- `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION` — Vertex AI für die Gemini-Modelle (Anmeldung über `gcloud auth application-default login`)
+- `OPENAI_API_KEY` — Judge-Modell
+- `SEC_EDGAR_EMAIL` — Identifikation gegenüber SEC EDGAR
 
-Damit die Modelle laufen, musst du deinen Google API Schlüssel hinterlegen.
-
-1. Gehe dazu in das [Google AI Studio](https://aistudio.google.com/app/apikey).
-2. Erstelle dir dort einen kostenlosen API-Key.
-3. Erstelle im Hauptverzeichnis des Projekts eine `.env` Datei.
-4. Trage deinen Key in diese Datei ein:
-
-```env
-GOOGLE_API_KEY="AIzaSy...Dein-Google-API-Key-Hier"
-```
-
-_(Optional: Hier können auch andere Umgebungsvariablen wie Tokens für LangSmith zum Tracing eingetragen werden)._
-
----
-
-## Projekt ausführen
-
-### Notebooks & Showcases
-
-Um interaktiv mit den Systemen zu agieren, eignen sich die bereitgestellten Notebooks.
-
-- Um Jupyter im `uv` Environment zu starten, tippe ins Terminal:
-  ```bash
-  uv run jupyter lab
-  ```
-  Gehe dann in den Ordner `notebooks/showcases/` und öffne z.B.:
-  - `demo_data_pipeline.ipynb` - Zum Verständnis der Datenverarbeitung.
-  - `demo_system1_rag_monolith.ipynb` - Laufendes System 1.
-  - `demo_system2_agent_rag.ipynb` - Laufendes System 2.
-
-### Evaluierungen & Experimente
-
-Skripte für strukturierte Evaluierungen oder Experimentationen liegen überwiegend im `configs/`-Ordner verknüpft mit `src/evaluation/` oder im Bereich `notebooks/experiments/`.
-
-Skripte können direkt im Context des Virtual Environments aufgerufen werden, zum Beispiel ein Ablation-Experiment in System 1:
+## Reproduktion
 
 ```bash
-uv run python -m src.systems.rag_monolith.ablation.optuna_search
+# 1. Korpus laden und prüfen
+uv run python -c "from src.common import download_all_filings; download_all_filings()"
+uv run python scripts/validate_ingestion.py
+uv run python scripts/validate_gold_standard.py
+
+# 2. Drei vollständige Läufe aller vier Systeme (API-Kosten!)
+uv run python scripts/run_full_eval.py --parallel --run-ids run1 run2 run3
+
+# 3. Auswertung und Abbildungen (ohne API-Aufrufe)
+uv run python scripts/aggregate_runs.py run1 run2 run3
+uv run python scripts/analyze_final_eval.py run1 run2 run3
+uv run python scripts/plot_chapter5_figures.py   # schreibt nach docs/thesis/figures/
 ```
 
-## Tests ausführen
+Weitere Skripte:
 
-Um sicherzustellen, dass das rudimentäre Basis-Setup (Daten-Ingestion, Retrival etc) richtig funktioniert, stehen Pytest-Suites bereit:
+- **Läufe ergänzen:** `run_systems_into_run.py`, `rerun_and_merge_items.py`, `rescore_locus_faithfulness.py`, `generate_report.py`, `flag_latency_contamination.py`
+- **Judge-Validierung:** `run_judge_validation_batch.py`, `build_judge_validation_sample.py`, `merge_human_ratings.py`, `analyze_judge_validation.py`, `groundedness_calibration.py`, `validity_sensitivity_test.py`
+- **Refusal-Handbewertung:** `build_refusal_rating_sheet.py`
+
+Jedes Skript beschreibt Zweck und Aufruf in seinem Modul-Docstring.
+
+## Tests
 
 ```bash
-# Tests für Linux/Mac/Windows starten
 uv run pytest
 ```
