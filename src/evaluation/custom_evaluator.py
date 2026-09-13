@@ -44,13 +44,11 @@ class CustomEvalResult:
     refusal_accuracy: float = 0.0
     rationales: dict = field(default_factory=dict)
 
-    # --- metrics that are undefined for part of the dataset -----------------
-    #
-    # None, not 0.0: these two are each computed on only one half of the gold
+    # None, not 0.0: each of these is defined on only one half of the gold
     # standard, and a 0.0 default would be averaged in as "the system failed"
-    # over the half where the metric has no meaning at all. The three metrics
-    # above predate this and keep their 0.0 default because eval_runner
-    # already branches on expected_answerable before reading them.
+    # over the half where the metric has no meaning. The three metrics above
+    # keep 0.0 because eval_runner branches on expected_answerable before
+    # reading them.
     refusal_quality: float | None = None
     """0/0.5/1.0 on FA-Refusal items, None on answerable ones."""
 
@@ -76,27 +74,20 @@ class CustomEvalResult:
 # ---------------------------------------------------------------------------
 #  Deterministic numeric tolerance pre-check (exact_match / answer_recall)
 #
-#  Human-validation on the judge-validation sample (see
-#  EVAL_DECISION_LOG.md [2026-08-01]) found kappa=0.08 for exact_match and
-#  kappa=0.41 for answer_recall: the LLM judge does not reliably apply its
-#  own stated rounding/unit-equivalence rule (e.g. "$112,390 million" vs.
-#  GT "$112.4 billion" — mathematically equal, scored as a mismatch in
-#  roughly half of the disagreement cases). This pre-check only ever
-#  CONFIRMS a match (never asserts a mismatch) — anything it can't
-#  confidently verify still falls through to the LLM judge, so it cannot
-#  introduce new false negatives of its own.
+#  An LLM judge does not reliably apply its own rounding/unit-equivalence
+#  rule ("$112,390 million" vs. "$112.4 billion" is mathematically equal
+#  but often scored as a mismatch). The pre-check only ever CONFIRMS a
+#  match, never asserts a mismatch; anything it cannot verify falls through
+#  to the judge, so it introduces no false negatives of its own.
 #
-#  It can, however, produce false POSITIVES, and those are not symmetric
-#  across systems: a bare number in the system answer used to be assumed
-#  to already sit on the ground truth's scale, so the longer an answer is,
-#  the more numbers it offers as accidental matches — which would favour
-#  the systems that write longer answers (S3/S4). Numbers taken from the
-#  *answer* are therefore only accepted when they carry an explicit unit
-#  signal (magnitude word, currency marker or percent marker); a bare
-#  number is treated as unusable and the item falls through to the LLM
-#  judge. Numbers taken from the *ground truth* keep the old lenient
-#  reading: those strings are short, curated, and authored at gt_unit's
-#  scale by construction.
+#  False positives would not be symmetric across systems: the longer an
+#  answer, the more numbers it offers as accidental matches, which would
+#  favour the systems that write longer answers (S3/S4). Numbers taken from
+#  the *answer* are therefore only accepted when they carry an explicit unit
+#  signal (magnitude word, currency marker or percent marker); a bare number
+#  is unusable and the item goes to the judge. Numbers from the *ground
+#  truth* are read leniently: those strings are short, curated, and written
+#  at gt_unit's scale by construction.
 # ---------------------------------------------------------------------------
 
 _UNIT_MULTIPLIERS = {
@@ -217,8 +208,8 @@ def _normalize_to_base(
 
 # gt_units the pre-check never rules on. "text"/"n/a"/"" aren't numeric
 # comparisons at all; "count" is numeric but carries no unit signal that
-# could tie a number in the answer to the asked-for quantity (gold standard
-# v4 has counts such as "2" — a digit that appears in almost any long
+# could tie a number in the answer to the asked-for quantity (the gold
+# standard has counts such as "2", a digit that appears in almost any long
 # answer by chance). All of them fall through to the LLM judge.
 _UNITS_WITHOUT_DETERMINISTIC_CHECK = {"", "text", "n/a", "count"}
 
@@ -277,13 +268,11 @@ def _deterministic_numeric_match(
 #
 #  exact_match is dispatched by answer type (see _classify_answer_type):
 #  atomic numeric values, cross-entity comparison verdicts, and qualitative/
-#  categorical claims each get a purpose-built prompt rather than one
-#  generic numeric-match prompt for all three. See EVAL_DECISION_LOG.md
-#  [2026-09] for the rationale (a single numeric-match prompt was found to
-#  near-always fail on qualitative items via literal wording, and the
-#  deterministic pre-check is unsound for comparison items -- it matches
-#  numbers as an unordered set with no entity binding, so a reversed verdict
-#  with the same two raw numbers present would be falsely confirmed).
+#  categorical claims each get a purpose-built prompt. A single numeric-match
+#  prompt fails qualitative items on literal wording, and the deterministic
+#  pre-check is unsound for comparison items: it matches numbers as an
+#  unordered set with no entity binding, so a reversed verdict with the same
+#  two raw numbers present would be falsely confirmed.
 # ---------------------------------------------------------------------------
 
 EXACT_MATCH_PROMPT = """\
@@ -372,12 +361,9 @@ Output ONLY a JSON object:
 def _corpus_scope_sentence() -> str:
     """Describe the corpus the systems actually see, from configs/base.yaml.
 
-    Hard-coding this was a live defect: the prompt claimed "FY2022, FY2023 and
-    FY2024 ONLY" long after the corpus had moved to FY2020/FY2022/FY2024, so
-    the judge rewarded a refusal on a question the corpus could answer and
-    penalised the correct answer — across the whole 30-item refusal stratum.
-    Deriving it from the same file the systems are built from makes that
-    divergence impossible. See EVAL_DECISION_LOG.md [2026-09-06].
+    Derived from the same file the systems are built from, so the judge can
+    never hold a different idea of the corpus than the systems do; a
+    hard-coded scope would reward refusals on questions the corpus answers.
     """
     config = load_config()
     tickers = [c["ticker"] for c in config.get("companies", [])]
@@ -646,7 +632,7 @@ def get_refusal_quality_prompt(subtype: str) -> str:
 def get_evidence_clause(refusal_evidence: str) -> str:
     """The per-item evidence clause for the false-premise rubric.
 
-    An unclassified item (pre-v5 file) gets the conservative clause: demanding
+    An unclassified item gets the conservative clause: demanding
     a grounded correction that the corpus may not support would manufacture
     false negatives, so silence is assumed until the annotation says otherwise.
     """
@@ -662,7 +648,7 @@ def get_refusal_accuracy_prompt() -> str:
     )
 
 
-# Fallback reference for a pre-v5 file, where `gt_correction` is empty. Stating
+# Fallback reference for an item whose `gt_correction` is empty. Stating
 # that no reference is available is not the same as passing an empty string:
 # a blank line under a "Reference" heading reads to the judge as "nothing is
 # supportable here", which is the opposite of the intended meaning.
@@ -801,14 +787,10 @@ def evaluate_custom_metrics(item, answer: str) -> CustomEvalResult:
 
     # 3. Refusal Accuracy (Only for unanswerable/refusal questions)
     if not item.expected_answerable:
-        # `gt_correction` is passed for one narrowly defined job: to let the
-        # judge check a correction against a known-grounded reference instead
-        # of guessing. Guessing was the documented defect — on id 137 the
-        # judge scored S3 and S4 0.0 for correctly rectifying a false premise
-        # while S1 and S2 got 1.0 for a terser "not mentioned", and the
-        # mechanism was that a longer answer offers more surface to suspect.
-        # That penalised the more informative answer, differentially by
-        # architecture. See EVAL_DECISION_LOG.md [2026-09-07], status OPEN.
+        # `gt_correction` lets the judge check a premise correction against
+        # a known-grounded reference instead of guessing. Without it a longer,
+        # more informative correction offers more surface to suspect and is
+        # scored below a terse "not mentioned", differentially by architecture.
         prompt = get_refusal_accuracy_prompt().format(
             question=item.question,
             answer=answer,
@@ -820,9 +802,8 @@ def evaluate_custom_metrics(item, answer: str) -> CustomEvalResult:
         result.rationales["refusal_accuracy"] = data.get("rationale", "")
 
         # 4. Refusal Quality (secondary, subtype-conditioned). Separate judge
-        # call on purpose — see the rubric block above. Needs the v5 reference
-        # text; on a pre-v5 file gt_correction is empty and the metric stays
-        # None rather than grading against a blank reference.
+        # call on purpose, see the rubric block above. Without a reference
+        # text the metric stays None rather than grading against a blank.
         if item.gt_correction:
             quality_prompt = get_refusal_quality_prompt(item.subtype).format(
                 question=item.question,

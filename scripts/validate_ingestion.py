@@ -2,18 +2,16 @@
 
 For every processed 10-K under `data/processed/`, verifies that:
   1. The `## Financial Statements` section exists and is >= MIN_ITEM8_CHARS
-     characters long (guards against the TOC-stub failure mode seen in
-     MSFT FY2023/FY2024 before the intra-word-whitespace fix).
+     characters long (guards against a table-of-contents stub being taken
+     for the section).
   2. Its content contains at least MIN_MARKER_HITS of the canonical statement
      markers (INCOME STATEMENTS, BALANCE SHEETS, CASH FLOWS), with
      intra-word-whitespace tolerated.
-  3. The raw file is not merely an iXBRL viewer wrapper (guards against the
-     GOOGL FY2022 failure mode).
+  3. The raw file is not merely an iXBRL viewer wrapper.
   4. The narrative sections (Business, Risk Factors, MD&A) are present and
-     of plausible length. Item 8 alone is not enough: GOOGL FY2024 sat in
-     the corpus for weeks with Risk Factors truncated to 504 chars and MD&A
-     to 964 while its Financial Statements were intact at 128k, so every
-     check above passed. See EVAL_DECISION_LOG.md [2026-09-06].
+     of plausible length. Item 8 alone is not enough: a filing can carry
+     intact financial statements while its Risk Factors and MD&A are
+     truncated to a few hundred characters.
 
 Exit code:
   0 -> all filings pass

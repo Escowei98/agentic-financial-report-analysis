@@ -61,7 +61,7 @@ class RunMetrics:
         """
         Estimate cost based on Gemini 2.5 Flash pricing (standard tier).
 
-        Pricing (as of 2026-04, Vertex AI standard tier):
+        Vertex AI standard-tier pricing:
         - Input: $0.30 / 1M tokens
         - Output: $2.50 / 1M tokens
 
@@ -176,10 +176,7 @@ def compute_filings_hash(filings: Sequence[ProcessedFiling]) -> str:
     its extracted CONTENT (section names and their text). Identity alone is
     not enough: an accession number stays the same when a filing is
     re-parsed, so a corpus repair would leave every cache silently serving
-    the old text. That is not hypothetical — GOOGL FY2024 was re-ingested
-    on 2026-09-06 after its Risk Factors and MD&A had been truncated to a
-    few hundred characters, and the identity-only key would have kept S1
-    and S2 on the broken chunks. See EVAL_DECISION_LOG.md [2026-09-06].
+    the old text to S1 and S2.
 
     Section text is folded in as its own SHA-256 rather than concatenated,
     so hashing stays cheap on a multi-megabyte corpus.

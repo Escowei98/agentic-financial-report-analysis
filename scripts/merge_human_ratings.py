@@ -1,23 +1,20 @@
 """
-Merge a rating JSON exported from rating_ui{,_reserve}.html back into the
-blind CSV.
+Merge a human-rating JSON payload back into the blind CSV.
 
-The rating page is deliberately read-only against the CSV: the trajectories
-are multi-line quoted fields, and letting the browser rewrite them is
-exactly how the file would silently corrupt. All CSV writes go through
-Python's csv module here, from the JSON payload the page produced.
+The ratings are collected outside the CSV on purpose: the trajectories are
+multi-line quoted fields, and letting a rating tool rewrite them is exactly
+how the file would silently corrupt. All CSV writes go through Python's csv
+module here, from a JSON payload of {review_id: {column: value}}.
 
 Rules for merging:
   - Only one pass's columns and the notes column are ever touched per run:
-    the five reasoning-dimension columns by default, or (--pass2) the five
+    the three reasoning-dimension columns by default, or (--pass2) the five
     custom-metric columns (exact_match/answer_recall/refusal_accuracy/
     refusal_quality/over_refusal). citation_accuracy is scored deterministically
     and is never human-rated, so it is never touched by either pass.
-  - "N/A" cells are structural (a dimension that does not apply -- the
-    agentic ones on rag_monolith, or a custom metric the automated evaluator
-    never computed for that row) and are never overwritten. The rating page
-    cannot produce a rating for them; if a JSON payload does, it's rejected
-    with an error.
+  - "N/A" cells are structural (a dimension that does not apply, or a custom
+    metric the automated evaluator never computed for that row) and are
+    never overwritten; a payload that rates one is rejected with an error.
   - An existing rated value is not silently replaced. If the exported JSON
     disagrees with the CSV, the cell is skipped and reported unless
     --force is passed.
@@ -47,7 +44,7 @@ PASS1_RATING_COLUMNS = [
 # The three pass-1 dimensions are rated PER UNIT -- one evidential step, one
 # transition, one required sub-question -- so a record holds a variable number
 # of cells and the CSV stores a JSON map {unit: 0|1} rather than a scalar.
-# Everything else on the page stays scalar.
+# Everything else stays scalar.
 PER_UNIT_KEYS = {"groundedness", "validity", "completeness"}
 PASS2_RATING_COLUMNS = [
     "exact_match_human",
@@ -120,7 +117,7 @@ def _validate_rating(value, key: str, review_id: str) -> str:
         if v not in allowed:
             raise ValueError(
                 f"{review_id}.{key}: rating {raw!r} is not one of "
-                f"{sorted(allowed)} — the page shouldn't emit this. "
+                f"{sorted(allowed)}. "
                 "Refusing to merge."
             )
         return v
@@ -146,7 +143,7 @@ def _validate_rating(value, key: str, review_id: str) -> str:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("payload", type=Path, help="human_ratings_*.json exported from the page")
+    parser.add_argument("payload", type=Path, help="human_ratings_*.json payload")
     parser.add_argument(
         "--sample", default=None,
         help="Merge into an arbitrary named sample (e.g. 'sensitivity') instead of the primary/reserve pair.",
@@ -263,7 +260,7 @@ def main() -> None:
             existing = (row.get(column) or "").strip()
 
             if existing.upper() == "N/A":
-                # Structural — the page shouldn't have offered this cell. Flag
+                # Structural: this cell must not carry a rating. Flag
                 # it so a bug in the build script or an edited JSON can't
                 # silently poison the sample.
                 na_attempts.append(f"{review_id}.{key} (would overwrite N/A with {new_value})")

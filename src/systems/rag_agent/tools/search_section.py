@@ -47,10 +47,9 @@ def _format_section_results(
         # Chunks are tagged with the FILING's fiscal year, so a filter on a
         # year that has no filing of its own finds nothing even though the
         # year is reported in a later filing's comparative columns. Say
-        # which filing carries it instead of a bare miss -- otherwise the
-        # agent concludes the year is outside the corpus, which is exactly
-        # what happened to every FY2023 question before 2026-09-09. The
-        # judge is given the same fact; see src/common/corpus_coverage.py.
+        # which filing carries it instead of a bare miss, otherwise the
+        # agent concludes the year is outside the corpus. The judge is given
+        # the same fact; see src/common/corpus_coverage.py.
         if available_fiscal_years and fiscal_year not in available_fiscal_years:
             carrying = filings_carrying_year(fiscal_year, available_fiscal_years)
             if carrying:

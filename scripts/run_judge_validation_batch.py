@@ -1,11 +1,8 @@
 """
-Runs S1-S4 on the judge-validation primary sample (10 stratified gold-standard
-IDs, 2x per fa_type) and evaluates them with the current (OpenAI-backed)
-judge. Output is separate from data/results/mini_eval_complete/ (which holds
-the pre-judge-swap Gemini-judged runs) to avoid mixing judge versions.
-
-See docs/decisions/EVAL_DECISION_LOG.md [2026-08-01] for why this sample
-exists and how it will be used (human-validation blind rating).
+Runs S1-S4 on the judge-validation sample (primary or, with --reserve, the
+reserve sample; see src/evaluation/judge_validation_sample.py) and evaluates
+them with the judge. The raw output is what build_judge_validation_sample.py
+turns into the blind human-rating CSV.
 """
 import argparse
 import logging
@@ -38,7 +35,7 @@ def main():
     parser.add_argument(
         "--reserve", action="store_true",
         help="Use the disjoint reserve sample instead of the primary sample "
-             "(for post-fix re-validation, see EVAL_DECISION_LOG.md).",
+             "(for re-validating a judge fix on items that did not motivate it).",
     )
     parser.add_argument(
         "--parallel", action="store_true",

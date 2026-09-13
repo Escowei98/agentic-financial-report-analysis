@@ -1,9 +1,8 @@
 """
 Unit tests for the shared agent-message parser.
 
-This loop previously existed five times across S2, S3 and S4. The tests
-below pin the behaviour the four systems' token accounting, process metrics
-and judge-facing trajectories all depend on.
+S2, S3 and S4 share this loop. The tests below pin the behaviour their
+token accounting, process metrics and trajectories all depend on.
 """
 
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage

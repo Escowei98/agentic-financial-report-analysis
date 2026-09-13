@@ -4,8 +4,7 @@ against the hidden judge scores in judge_scores_reference.json.
 
 Run this ONLY after the blind CSV has been fully rated.
 
-Implements the measurement/threshold protocol from
-docs/decisions/EVAL_DECISION_LOG.md [2026-08-01]:
+Measurement/threshold protocol:
   - binary/tri-level metrics: agreement rate, unweighted Cohen's kappa,
     Gwet's AC1, mean signed difference.
   - 1-5 scales, if any survive: additionally +/-1-tolerance and Spearman rho,
@@ -14,23 +13,17 @@ docs/decisions/EVAL_DECISION_LOG.md [2026-08-01]:
     (a dimension fails regardless of its pooled kappa if the judge's bias
     differs meaningfully between systems).
 
-Trust thresholds (pre-registered, see decision log): pooled kappa AND AC1
+Trust thresholds (pre-registered): pooled kappa AND AC1
 >= 0.60, +/-1-tolerance >= 80% where applicable, |mean signed diff| <= 0.5,
 no per-system bias spread > 0.5.
 
 WHY GWET'S AC1 IS REPORTED ALONGSIDE KAPPA
 ------------------------------------------
 Cohen's kappa collapses when one category dominates the marginal, even at
-high raw agreement -- the prevalence paradox. It happened here: at 69%
-agreement, `refusal_accuracy` scored kappa 0.13 on a 14-to-2 human marginal.
-Prevalence-adjusted, the same data give AC1 0.53. Reporting only kappa
-overstates the defect; reporting only agreement hides it.
-
-AC1 was introduced at the point where it changed NO verdict -- 0.53 and 0.58
-still fall short of the 0.60 threshold, exactly as 0.13 and 0.43 did. That is
-deliberate: a coefficient adopted while it cannot rescue anything is adopted
-on its properties rather than on its result. The threshold is unchanged and
-now applies to both coefficients; a metric must clear it on each.
+high raw agreement (the prevalence paradox), which is the normal situation
+for a binary metric on a small stratum. Reporting only kappa overstates a
+defect; reporting only agreement hides it. The same threshold applies to
+both coefficients; a metric must clear it on each.
 
 The marginal distributions are printed with every dimension so a low
 coefficient can be read for what it is, and so a scale level that never
@@ -216,11 +209,8 @@ def _analyze_dimension(name, pairs, scale):
     # Cohen's kappa is identically 0 whenever ONE rater is constant: with
     # p(human=1)=1, expected agreement equals the judge's own rate of 1s,
     # which is also the observed agreement, so the numerator is 0 whatever
-    # the raters did. Until 2026-09-09 only the both-sides-constant case was
-    # treated as degenerate, and the validity dimension -- human 81:0, judge
-    # 78:3, 96% agreement -- came out as "FAIL, kappa 0.00", a verdict about
-    # the formula rather than about the judge. See EVAL_DECISION_LOG.md
-    # [2026-09-09].
+    # the raters did. A "FAIL, kappa 0.00" there would be a verdict about
+    # the formula rather than about the judge.
     human_constant = len(set(humans)) < 2
     judge_constant = len(set(judges)) < 2
     degenerate = human_constant or judge_constant
@@ -483,15 +473,9 @@ def main():
 
     # --- Fairness: differential bias per system ----------------------------
     #
-    # This replaces a robustness check that compared the two systems untouched
-    # by the 2026-09-08 reflection defect. That defect lived in outputs which
-    # no longer exist -- the verifier was repaired before the current pilot
-    # ran -- so the subset isolated nothing and the section measured nothing.
-    #
-    # What it stood in for is the question that actually matters and is asked
-    # directly here: does the judge treat one architecture differently from
-    # another? The retired Core Score failed on exactly this, at 2.33 to 2.75
-    # scale points, while its pooled agreement looked merely mediocre.
+    # Does the judge treat one architecture differently from another? A
+    # metric can agree acceptably overall and still be unusable for the
+    # comparison if its bias differs between systems.
     report_lines += [
         "",
         "---",
@@ -499,10 +483,8 @@ def main():
         "## Differential bias per system",
         "",
         "A metric can agree well overall and still be unusable for comparing "
-        "architectures, if it is systematically harder on one of them. That is "
-        "how the retired Core Score failed: pooled kappa around 0.1, but a "
-        "spread of 2.33 to 2.75 scale points between systems. The threshold "
-        f"below is {SYSTEM_SPREAD_THRESHOLD}.",
+        "architectures, if it is systematically harder on one of them. The "
+        f"threshold on the per-system spread is {SYSTEM_SPREAD_THRESHOLD}.",
         "",
         "| Metric | " + " | ".join(SYSTEM_ORDER) + " | spread | within threshold |",
         "|---" * (len(SYSTEM_ORDER) + 3) + "|",

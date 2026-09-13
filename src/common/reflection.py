@@ -22,7 +22,7 @@ import logging
 from typing import Any, Literal
 
 from langchain_core.language_models import BaseChatModel
-from langchain_core.messages import HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.runnables import Runnable
 from pydantic import BaseModel, Field
@@ -293,6 +293,32 @@ def unpack_reflection_result(
 #  Shared single-pass reflection + correction round (S2, S3)
 # ---------------------------------------------------------------------------
 
+def _serialises_to_zero_parts(msg: Any) -> bool:
+    """
+    True for an AIMessage that Gemini would reject as a Content with no parts.
+
+    Gemini turns every message into a `Content` holding at least one `part`.
+    An AIMessage carrying no text, no `tool_calls` and no `function_call` in
+    `additional_kwargs` yields zero parts; resending a history containing one
+    makes Vertex answer `400 ... must include at least one parts field`.
+
+    Messages WITH tool calls are unaffected, the `function_call` is itself a
+    part, so only wholly empty AIMessages are dropped and no ToolMessage can
+    be orphaned by the filter.
+    """
+    if not isinstance(msg, AIMessage):
+        return False
+    content = msg.content
+    if content.strip() if isinstance(content, str) else content:
+        return False
+    if getattr(msg, "tool_calls", None):
+        return False
+    extra = getattr(msg, "additional_kwargs", None) or {}
+    if extra.get("function_call") or extra.get("tool_calls"):
+        return False
+    return True
+
+
 def run_reflection_pass(
     *,
     agent: Any,
@@ -342,7 +368,7 @@ def run_reflection_pass(
             prompt and never passes through here: without the preamble the
             verifier reads a bare `calculate` result under the heading
             "Retrieved source contexts" and necessarily concludes that
-            nothing is grounded. See EVAL_DECISION_LOG.md [2026-09-08].
+            nothing is grounded.
         log_prefix: Optional prefix for log lines (e.g. "S3 ").
 
     Returns:
@@ -374,7 +400,14 @@ def run_reflection_pass(
     was_revised = False
     feedback_msg = generate_feedback_message(verdict)
     if feedback_msg is not None:
-        revised_messages = messages + [feedback_msg]
+        sendable = [m for m in messages if not _serialises_to_zero_parts(m)]
+        dropped = len(messages) - len(sendable)
+        if dropped:
+            logger.info(
+                "%sDropping %d empty message(s) before revision re-invoke.",
+                log_prefix, dropped,
+            )
+        revised_messages = sendable + [feedback_msg]
         try:
             second_result = agent.invoke(
                 {"messages": revised_messages},
@@ -383,14 +416,11 @@ def run_reflection_pass(
             messages = second_result.get("messages", revised_messages)
             was_revised = True
         except Exception as e:
-            # Known upstream flakiness: Gemini 2.5's per-tool-call "thought
-            # signature" occasionally fails to round-trip through
-            # langchain-google-vertexai when the full message history (incl.
-            # prior tool calls) is resent, surfacing as InvalidArgument
-            # "must include at least one parts field". Not reproducible
-            # deterministically per-question, so it can't be fixed at the
-            # message-construction level. Fall back to the pre-revision
-            # draft rather than losing the query outright.
+            # The dominant cause of a failed re-invoke, an empty AIMessage
+            # serialising to zero parts, is filtered out above. This fallback
+            # is the net for the remaining causes, chiefly ResourceExhausted
+            # (429), so a transient error costs the revision rather than the
+            # whole query.
             logger.warning(
                 "%sRevision re-invoke failed (%s: %s); keeping pre-revision "
                 "draft answer.",

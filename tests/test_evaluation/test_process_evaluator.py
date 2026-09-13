@@ -61,6 +61,6 @@ def test_calculate_cost_per_correct_answer():
 
     # threshold 2.0 -> 0 correct. None, not 0.0: an undefined cost per
     # correct answer must not sort as the best value in the comparison
-    # table. See EVAL_DECISION_LOG.md [2026-09-06].
+    # table.
     result3 = calculate_cost_per_correct_answer(cost, scores, threshold=2.0)
     assert result3 is None

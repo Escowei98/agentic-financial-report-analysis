@@ -358,13 +358,10 @@ class MultiAgentPipeline:
         tool_calls = state.get("tool_calls_log", [])
 
         # The specialist outputs ARE the evidence the synthesizer answered
-        # from — it sees nothing else — so they are what the verifier has to
-        # check against. This used to pass the fixed string "(Specialist
-        # outputs were provided to the synthesizer)", i.e. a sentence about
-        # evidence instead of the evidence, which left criterion 1
-        # (groundedness) with nothing to check and drove `revise` on 6 of 12
-        # items in the 2026-09-08 reserve run. They are already in state; the
-        # synthesizer node formats them the same way a few lines up.
+        # from (it sees nothing else), so they are what the verifier has to
+        # check against; a sentence about the evidence would leave criterion
+        # 1 (groundedness) with nothing to check. Formatted the same way the
+        # synthesizer node sees them.
         outputs = state.get("specialist_outputs", {})
         if outputs:
             contexts = "\n\n---\n\n".join(

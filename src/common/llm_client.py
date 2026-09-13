@@ -115,8 +115,7 @@ def get_judge_llm(**kwargs) -> BaseChatModel:
         raise ValueError(
             f"Unsupported judge provider {provider!r} in configs/evaluation.yaml. "
             "Only 'openai' is implemented. The judge must stay outside the "
-            "Gemini family the four systems generate with — see "
-            "docs/decisions/EVAL_DECISION_LOG.md [2026-08-01]."
+            "Gemini family the four systems generate with."
         )
 
     api_key = config.get("openai_api_key")

@@ -1,14 +1,9 @@
 """
-Reasoning Quality Evaluator (chain-based, binary per unit).
+Reasoning quality evaluator (chain-based, binary per unit).
 
-Replaces the two-tier Core/Agentic judge retired on 2026-09-08. That judge
-scored five 1-5 dimensions off each architecture's own trace format and failed
-human validation on every one of them -- weighted kappa 0.03 to 0.17, and,
-decisively, a per-system spread of up to 2.75 scale points. A metric that
-marks one architecture down by half the scale cannot carry a comparison
-between architectures.
-
-Three dimensions, all binary at the unit of judgement:
+Scores the reasoning chain every system emits in a shared format, so that no
+architecture is judged off its own trace format. Three dimensions, all
+binary at the unit of judgement:
 
   1. Groundedness  -- per evidential step, against the passages at the locus
                       the step itself cites (see evidence_store.py).
@@ -16,17 +11,14 @@ Three dimensions, all binary at the unit of judgement:
   3. Completeness  -- per required sub-question of the gold standard's
                       reference decomposition, is it covered by the chain.
 
-Nothing here is scored 1-5. The unanchored five-point scale is the single
-largest identified contributor to the disagreement in the retired instrument:
-raters and judge were not disagreeing about the facts of a chain so much as
-about where on a scale a given flaw belonged.
+Nothing here is scored on a 1-5 scale: an unanchored scale makes raters and
+judge disagree about where a flaw belongs on the scale rather than about the
+facts of the chain.
 
 Population: the 120 answerable gold-standard items. FA-Refusal items have no
 meaningful reference decomposition -- the correct chain there is "the premise
 cannot be checked" -- and keep refusal_accuracy / refusal_quality /
 over_refusal instead.
-
-See docs/decisions/REASONING_QUALITY_SPEC.md sections 6-10.
 """
 
 from __future__ import annotations
@@ -47,7 +39,7 @@ from src.evaluation.reasoning_chain_parser import (
 
 logger = logging.getLogger(__name__)
 
-# Groundedness violation codes (spec section 6.3).
+# Groundedness violation codes.
 B_FABRICATION = "B1"
 B_DISTORTION = "B2"
 B_OVERGENERALISATION = "B3"
@@ -55,7 +47,7 @@ B_PARAMETRIC = "B4"
 B_NO_LOCUS = "B5"
 B_LOCUS_NOT_IN_CORPUS = "B6"
 
-# Validity violation codes (spec section 7.2).
+# Validity violation codes.
 V_UNSTATED_PREMISE = "V1"
 VALIDITY_CODES = ("V1", "V2", "V3", "V4", "V5")
 GROUNDEDNESS_CODES = (
@@ -85,7 +77,7 @@ class ChainReasoningScores:
     validity: float | None = None
     completeness: float | None = None
 
-    # Weakest-link aggregation (spec section 10.2). For binary per-unit
+    # Weakest-link aggregation. For binary per-unit
     # labels the minimum over a chain is all-or-nothing, so it is recorded as
     # a flag per chain and averaged into a share at run level.
     fully_grounded: bool | None = None
@@ -453,14 +445,11 @@ def _prepare_groundedness(
 
     for step in chain.evidential_steps:
         if not step.loci:
-            # NOT auto-B5 any more. In the pilot this rule produced 7 of the 8
-            # false alarms on groundedness: it fired on steps that make no
-            # claim about the filings at all -- "No context is provided for
-            # Microsoft", "The user is asking for the Total Revenue of GOOGL",
-            # "The calculated growth is 65.247%. (calculate)". The rater called
-            # those grounded, correctly: there is nothing in them to ground.
-            # The judge now decides whether the step asserts filing content
-            # (B5) or merely describes the run (no unit at all).
+            # Not automatically B5: many such steps make no claim about the
+            # filings at all ("No context is provided for Microsoft", "The
+            # calculated growth is 65.247%. (calculate)") and there is nothing
+            # in them to ground. The judge decides whether the step asserts
+            # filing content (B5) or merely describes the run (no unit).
             unsourced.append(step)
             continue
 
@@ -552,9 +541,8 @@ def evaluate_reasoning_chain(
                 )
                 continue
             # A "grounded" verdict stands only if its quote is really in the
-            # passages. Checked, not trusted: in the pilot the judge confirmed
-            # seven steps the rater rejected, asserting each time that the
-            # passage "contains" a derived ratio no 10-K states.
+            # passages. Checked, not trusted: a judge will happily assert that
+            # a passage "contains" a derived ratio no 10-K states.
             grounded = bool(entry.get("grounded"))
             missing = _unsupported_figures(
                 entry.get("supporting_values"), evidence_by_step.get(step_index, [])
@@ -601,33 +589,21 @@ def evaluate_reasoning_chain(
             if isinstance(entry, dict) and str(entry.get("step", "")).isdigit()
         }
         # Validity is assessed on transitions INTO INFERENTIAL STEPS only.
-        #
-        # The pilot of 2026-09-08 settled this empirically: the judge returned
-        # a verdict for 81 of 81 transitions into an inferential step and for
-        # only 15 of 63 into an evidential one, without ever being told to
-        # make that distinction. It had converged on a rule that holds -- a
-        # step introducing a new fact from the filings is a PREMISE, and a
-        # premise does not follow from anything. The human rater did the same.
-        # Counting those transitions as trivially valid would have filled the
-        # denominator with units that cannot discriminate, and their share
-        # differs per architecture (S1 ran 29 evidential to 28 inferential
-        # steps, S4 19 to 13), so it would have differed per architecture too.
+        # A step introducing a new fact from the filings is a premise, and a
+        # premise does not follow from anything. Counting those transitions
+        # as trivially valid would fill the denominator with units that
+        # cannot discriminate, and since the evidential/inferential mix
+        # differs per architecture, it would do so unequally.
         #
         # The V5 exception keeps the dimension honest: an evidential step that
         # contradicts an earlier one is a coherence defect that groundedness
         # cannot see, so the judge may return it and it counts.
-        # Excluded is the step that genuinely introduces filing evidence: type
-        # [E] AND a parseable locus. A step tagged [E] that cites nothing
-        # checkable is not a premise from the corpus -- it is the system
-        # narrating ("The user is asking for...") or carrying a computed
-        # result ("The calculated growth is 65.247%. (calculate)"), and
-        # whether that follows is a fair question.
-        #
-        # The sensitivity test of 2026-09-09 found this hole the hard way: in
-        # V022 the deleted premise left its damage on a step tagged [E] whose
-        # source was "(calculate)", so no assessable transition existed and
-        # the defect was invisible to the rater. 7% of evidential steps in the
-        # pilot carry no locus.
+        # Excluded is only the step that genuinely introduces filing
+        # evidence: type [E] AND a parseable locus. A step tagged [E] that
+        # cites nothing checkable is not a premise from the corpus; it is the
+        # system narrating ("The user is asking for...") or carrying a
+        # computed result ("... (calculate)"), and whether that follows is a
+        # fair question.
         required = [
             step.step_index for step in chain.steps[1:]
             if not (step.step_type == EVIDENTIAL and step.loci)
@@ -642,15 +618,10 @@ def evaluate_reasoning_chain(
                 continue
             # A figure the judge could not trace to an earlier step settles
             # the verdict mechanically, whatever the judge then concluded.
-            #
-            # Not defensive coding -- it is the fix for a measured defect. In
-            # the sensitivity test of 2026-09-09 the judge caught 3 of 12
-            # planted V1 defects, and its own rationales showed why: on one it
-            # wrote that the step follows "from the figures provided in step 1
-            # and the Total Net Sales, which is assumed". It SAW the gap and
-            # ruled valid anyway. Asking it to do the bookkeeping and applying
-            # the rule here moves the decision off its judgement and onto what
-            # it extracted.
+            # Judges see such a gap and rule valid anyway ("... and the Total
+            # Net Sales, which is assumed"); asking for the bookkeeping and
+            # applying the rule here moves the decision off its judgement and
+            # onto what it extracted.
             unsupported = [
                 str(v) for v in (entry.get("unsupported_values") or []) if str(v).strip()
             ]
@@ -767,9 +738,8 @@ def _unsupported_figures(values: list | None, passages: list[str]) -> list[str]:
     for value in values or []:
         # Extract the NUMBER, do not normalise the whole string. The judge
         # writes "$450,256 million"; stripping punctuation alone leaves
-        # "450256million", which matches nothing -- and 450,256 was in the
-        # passage all along. That artefact accounted for most of the false
-        # alarms the first figure-based version produced.
+        # "450256million", which matches nothing although 450,256 is in the
+        # passage.
         for raw_number in re.findall(r"\d[\d.,]*", str(value)):
             token = _FIGURE_CHARS_RE.sub("", raw_number)
             digits = sum(c.isdigit() for c in token)
@@ -804,7 +774,7 @@ def evaluate_reasoning_chain_batch(
     parsed_chains: list[ParsedChain] | None = None,
     keep_evidence: bool = False,
 ) -> list[ChainReasoningScores]:
-    """Score a run's answers. Refusal items are skipped (spec section 8.4).
+    """Score a run's answers. Refusal items are skipped.
 
     `answers` are the RAW system answers, chain block included. Pass
     `parsed_chains` when the caller has already split them -- eval_runner does,

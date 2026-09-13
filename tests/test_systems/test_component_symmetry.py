@@ -100,12 +100,11 @@ class TestSharedReflection:
         a note the verifier judges a bare `calculate` return as if it were the
         corpus. Equal treatment here means describing each architecture's
         evidence basis truthfully, not feeding both the same string.
-        See EVAL_DECISION_LOG.md [2026-09-08].
         """
         s3_source = inspect.getsource(s3.LongContextPipeline.query)
         assert "contexts_preamble=" in s3_source, (
-            "S3 no longer tells the verifier that its tool outputs are not "
-            "source evidence — the 2026-09-08 spurious-revision defect is back"
+            "S3 does not tell the verifier that its tool outputs are not "
+            "source evidence; correct answers would be revised spuriously"
         )
         note = s3._REFLECTION_EVIDENCE_NOTE
         assert "no retrieval" in note and "unsupported_claim" in note
@@ -190,7 +189,7 @@ class TestSharedNonAnswerabilityConvention:
 class TestSharedReasoningChainConvention:
     """Third shared convention. Unlike the other two it is deliberately NOT in
     every answer-emitting node: it belongs to the node whose answer is the
-    measured one. See REASONING_QUALITY_SPEC.md section 4."""
+    measured one."""
 
     def test_the_three_single_answer_systems_carry_it(self):
         prompts = _answer_emitting_prompts()
@@ -247,13 +246,11 @@ class TestSharedReasoningChainConvention:
 
 
 class TestSharedFewShotScenarios:
-    """Fourth shared component. The three worked examples used to exist in S2
-    and S3 only, with different third scenarios, and in no S4 node -- a
-    confounder on FF3 that the convention discipline had not covered because
-    examples were never treated as a shared component. Now the scenarios
-    (question + answer) are one constant and every LLM call sees exactly
-    three of them; only the step lines between question and answer differ,
-    because that is the architecture."""
+    """Fourth shared component. The scenarios (question + answer) are one
+    constant and every LLM call sees exactly three of them; only the step
+    lines between question and answer differ, because that is the
+    architecture. Examples in some systems but not others would confound
+    the comparison."""
 
     @staticmethod
     def _every_prompt() -> dict[str, str]:
@@ -323,9 +320,9 @@ class TestSharedFewShotScenarios:
 class TestSharedCorpusCoverage:
     """The corpus description -- which fiscal years a filing reports -- must
     reach every system, because the judge is given the same fact
-    (custom_evaluator._corpus_scope_sentence). Before 2026-09-09 only the
-    judge had it, and all four systems declined FY2023 questions as out of
-    corpus while the judge scored them as answerable."""
+    (custom_evaluator._corpus_scope_sentence). If only the judge had it, the
+    systems would decline FY2023 questions as out of corpus while the judge
+    scored them as answerable."""
 
     @staticmethod
     def _filing(ticker="AAPL", fy="2024"):

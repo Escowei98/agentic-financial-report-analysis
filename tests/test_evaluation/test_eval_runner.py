@@ -45,16 +45,36 @@ def _make_pipeline_result(answer: str = "answer", corrections: int = 0, cost: fl
 
 
 class FakePipeline:
-    """Stands in for a system pipeline; `responses` maps question -> result or Exception."""
+    """Stands in for a system pipeline; `responses` maps question -> result or Exception.
+
+    A value may also be a LIST, which is consumed one entry per call — that is
+    how a query that fails once and then succeeds is expressed.
+    """
 
     def __init__(self, responses: dict):
         self.responses = responses
+        self.calls: list[str] = []
 
     def query(self, question: str):
+        self.calls.append(question)
         response = self.responses[question]
-        if isinstance(response, Exception):
+        if isinstance(response, list):
+            response = response.pop(0)
+        if isinstance(response, BaseException):
             raise response
         return response
+
+
+@pytest.fixture(autouse=True)
+def _no_retry_backoff():
+    """Skip the real backoff sleeps.
+
+    Every failing query is retried QUERY_MAX_ATTEMPTS times with an
+    exponential wait between the attempts; at the real 5s base that would add
+    15 seconds per failing item to this file.
+    """
+    with patch("src.evaluation.eval_runner.time.sleep") as sleep:
+        yield sleep
 
 
 def _patch_evaluators(custom_metrics_by_question=None, citation_by_question=None, ragas_per_sample=None):
@@ -146,10 +166,9 @@ class TestRunFullEvaluationAggregation:
         return output, mock_ragas, mock_cost
 
     def test_cross_document_rate_includes_fa3_cross_window_items(self, tmp_path):
-        """FA-4 alone left out the 15 multi-year items whose span does not fit
-        inside one report's comparative columns — precisely what
-        `window_class` was added to identify.
-        See EVAL_DECISION_LOG.md [2026-09-06].
+        """FA-4 alone would leave out the multi-year items whose span does
+        not fit inside one report's comparative columns, which is what
+        `window_class` identifies.
         """
         items = [
             _make_gold_item(1, fa_type="FA-1"),
@@ -182,7 +201,7 @@ class TestRunFullEvaluationAggregation:
         pipeline = FakePipeline({f"q{i}": _make_pipeline_result() for i in (1, 2)})
         custom_by_q = {
             "q1": MagicMock(exact_match=1.0, answer_recall=1.0, refusal_accuracy=0.0),
-            # Would have counted as a success under the old rule.
+            # Partially present answer: not a success.
             "q2": MagicMock(exact_match=0.0, answer_recall=0.9, refusal_accuracy=0.0),
         }
 
@@ -266,10 +285,9 @@ class TestRunFullEvaluationAggregation:
 
     def test_score_to_track_dispatches_on_ground_truth_unit(self, tmp_path):
         """exact_match for items whose ground truth is a figure it can rule
-        on, answer_recall for the qualitative ones. The old rule read
-        "exact_match unless it is 0, else answer_recall", which let a wrong
-        figure with good coverage count as correct and contradicted the
-        comment above it. See EVAL_DECISION_LOG.md [2026-09-06].
+        on, answer_recall for the qualitative ones. "exact_match unless it is
+        0, else answer_recall" would let a wrong figure with good coverage
+        count as correct.
         """
         items = [
             _make_gold_item(1, gt_unit="USD_billion"),
@@ -431,9 +449,14 @@ class TestReasoningChainSplitting:
         items = [_make_gold_item(1)]
         pipeline = FakePipeline({"q1": _make_pipeline_result(answer=self.ANSWER_WITH_CHAIN)})
         patches = _patch_evaluators()
+        locus_result = MagicMock()
+        locus_result.to_dict.return_value = {"score": 0.9, "excluded": None}
+        patches["locus_faithfulness_batch"] = MagicMock(return_value=[locus_result])
         with patch("src.evaluation.eval_runner.evaluate_run", patches["ragas_evaluate_run"]), \
              patch("src.evaluation.eval_runner.evaluate_reasoning_chain_batch",
                    patches["reasoning_evaluate_batch"]), \
+             patch("src.evaluation.eval_runner.evaluate_locus_faithfulness_batch",
+                   patches["locus_faithfulness_batch"]), \
              patch("src.evaluation.eval_runner.evaluate_custom_metrics", patches["custom_metrics"]), \
              patch("src.evaluation.eval_runner.evaluate_citation_accuracy", patches["citation_metrics"]), \
              patch("src.evaluation.eval_runner.format_trajectory", patches["format_trajectory"]), \
@@ -460,6 +483,24 @@ class TestReasoningChainSplitting:
         raw_answers = patches["reasoning_evaluate_batch"].call_args.args[1]
         assert "## Reasoning" in raw_answers[0]
 
+    def test_locus_faithfulness_scores_the_stripped_answer(self, tmp_path):
+        """The construct is the final answer's statements, not the chain's."""
+        result, patches = self._run(tmp_path, evidence_store=MagicMock())
+        _, answers, answerable, _ = patches["locus_faithfulness_batch"].call_args.args
+        assert "## Reasoning" not in answers[0]
+        assert answerable == [True]
+        assert result["detailed_results"][0]["locus_faithfulness"] == {
+            "score": 0.9, "excluded": None,
+        }
+        assert result["summary"]["locus_faithfulness_summary"]["n_scored"] == 1
+
+    def test_without_a_store_locus_faithfulness_is_excluded_not_zero(self, tmp_path):
+        result, patches = self._run(tmp_path)
+        patches["locus_faithfulness_batch"].assert_not_called()
+        locus = result["detailed_results"][0]["locus_faithfulness"]
+        assert locus["score"] is None
+        assert locus["excluded"] == "no_evidence_store"
+
     def test_without_a_store_the_chain_shape_is_still_recorded(self, tmp_path):
         """A run configured without corpus access still reports how many
         chains came back and how long they were -- chain_emission_rate is a
@@ -470,3 +511,113 @@ class TestReasoningChainSplitting:
         assert reasoning["chain_emitted"] is True
         assert reasoning["num_steps"] == 2
         assert reasoning["groundedness"] is None
+
+
+class TestQueryRetry:
+    """Transient query failures are retried, uniformly and countably.
+
+    A query that dies on a transient endpoint error is dropped from every
+    average, which silently changes the base a system is measured on. The
+    retry is applied identically to all four systems, so it adds no
+    asymmetry — but it does blur "the endpoint hiccuped" into "this system
+    fails more often", so every attempt has to end up in the output.
+    """
+
+    def _run(self, pipeline, items, tmp_path, **kwargs):
+        patches = _patch_evaluators()
+        patches["reasoning_evaluate_batch"].return_value = [
+            MagicMock(to_dict=MagicMock(return_value={})) for _ in items
+        ]
+        with patch("src.evaluation.eval_runner.evaluate_run", patches["ragas_evaluate_run"]), \
+             patch("src.evaluation.eval_runner.evaluate_reasoning_chain_batch", patches["reasoning_evaluate_batch"]), \
+             patch("src.evaluation.eval_runner.evaluate_custom_metrics", patches["custom_metrics"]), \
+             patch("src.evaluation.eval_runner.evaluate_citation_accuracy", patches["citation_metrics"]), \
+             patch("src.evaluation.eval_runner.format_trajectory", patches["format_trajectory"]), \
+             patch("src.evaluation.eval_runner.calculate_cost_per_correct_answer", return_value=0.02):
+            return run_full_evaluation(pipeline, "rag_monolith", items, tmp_path, **kwargs)
+
+    def test_a_transient_failure_is_retried_and_the_item_is_kept(self, tmp_path):
+        items = [_make_gold_item(1)]
+        pipeline = FakePipeline({"q1": [RuntimeError("503"), _make_pipeline_result(answer="ok")]})
+
+        output = self._run(pipeline, items, tmp_path)
+
+        assert output["summary"]["successful_queries"] == 1
+        assert output["summary"]["failed_queries"] == 0
+        assert pipeline.calls == ["q1", "q1"]
+
+    def test_the_attempt_count_is_recorded_per_item(self, tmp_path):
+        items = [_make_gold_item(1), _make_gold_item(2)]
+        pipeline = FakePipeline({
+            "q1": [RuntimeError("503"), _make_pipeline_result(answer="ok")],
+            "q2": _make_pipeline_result(answer="ok"),
+        })
+
+        output = self._run(pipeline, items, tmp_path)
+
+        attempts = {d["query_id"]: d["query_attempts"] for d in output["detailed_results"]}
+        assert attempts == {1: 2, 2: 1}
+
+    def test_the_summary_names_which_items_needed_a_retry(self, tmp_path):
+        """Two systems both at 150/150 are not in the same state if one retried."""
+        items = [_make_gold_item(1), _make_gold_item(2)]
+        pipeline = FakePipeline({
+            "q1": [RuntimeError("503"), _make_pipeline_result(answer="ok")],
+            "q2": _make_pipeline_result(answer="ok"),
+        })
+
+        summary = self._run(pipeline, items, tmp_path)["summary"]
+
+        assert summary["retried_queries"] == 1
+        assert summary["retried_query_ids"] == {"1": 2}
+        assert summary["query_max_attempts"] == 3
+
+    def test_a_clean_run_reports_no_retries(self, tmp_path):
+        items = [_make_gold_item(1)]
+        pipeline = FakePipeline({"q1": _make_pipeline_result(answer="ok")})
+
+        summary = self._run(pipeline, items, tmp_path)["summary"]
+
+        assert summary["retried_queries"] == 0
+        assert summary["retried_query_ids"] == {}
+
+    def test_a_persistent_failure_still_fails_after_the_last_attempt(self, tmp_path):
+        items = [_make_gold_item(1), _make_gold_item(2)]
+        pipeline = FakePipeline({
+            "q1": RuntimeError("agent crashed"),
+            "q2": _make_pipeline_result(answer="ok"),
+        })
+
+        output = self._run(pipeline, items, tmp_path)
+
+        assert output["summary"]["failed_query_ids"] == [1]
+        assert pipeline.calls.count("q1") == 3
+
+    def test_max_attempts_one_disables_retrying(self, tmp_path):
+        items = [_make_gold_item(1)]
+        pipeline = FakePipeline({"q1": RuntimeError("agent crashed")})
+
+        output = self._run(pipeline, items, tmp_path, max_attempts=1)
+
+        assert output == {"error": "All queries failed"}
+        assert pipeline.calls == ["q1"]
+
+    def test_the_backoff_grows_between_attempts(self, tmp_path, _no_retry_backoff):
+        """Retrying a rate-limited endpoint at a fixed interval just re-hits it."""
+        items = [_make_gold_item(1)]
+        pipeline = FakePipeline({"q1": RuntimeError("429")})
+
+        self._run(pipeline, items, tmp_path)
+
+        waits = [call.args[0] for call in _no_retry_backoff.call_args_list]
+        assert waits == [5.0, 10.0]
+
+    def test_a_keyboard_interrupt_is_not_swallowed(self, tmp_path):
+        """A run of this size has to stay interruptible."""
+        items = [_make_gold_item(1)]
+        pipeline = FakePipeline({"q1": KeyboardInterrupt()})
+
+        with pytest.raises(KeyboardInterrupt):
+            self._run(pipeline, items, tmp_path)
+
+        assert pipeline.calls == ["q1"]

@@ -119,10 +119,9 @@ class TestLoadConfig:
 class TestLoadConfigRejectsPaths:
     """`load_config` takes a system NAME, not a path.
 
-    Handing it a path used to resolve to a non-existent "<path>.yaml", skip
-    the merge without a word, and leave the caller on base.yaml alone — which
-    silently put S1 and S2 on diverging chunking defaults and broke the shared
-    retrieval stack FP-3 requires. Failing loudly is the guard.
+    A path would resolve to a non-existent "<path>.yaml", skip the merge
+    without a word, and leave the caller on base.yaml alone, silently putting
+    S1 and S2 on diverging chunking defaults. Failing loudly is the guard.
     """
 
     def test_rejects_path_object(self):

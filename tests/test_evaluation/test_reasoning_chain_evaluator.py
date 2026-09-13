@@ -115,12 +115,11 @@ class TestCleanChain:
 
 class TestSettledWithoutTheJudge:
     def test_an_unsourced_claim_about_the_filings_is_B5(self):
-        """No longer decided deterministically.
+        """Not decided deterministically.
 
-        Auto-B5 on every locus-less [E] step produced 7 of the 8 groundedness
-        false alarms in the pilot: it fired on steps that assert nothing about
-        the filings at all. The judge now separates the two cases, and only a
-        step claiming filing content is B5.
+        Auto-B5 on every locus-less [E] step would fire on steps that assert
+        nothing about the filings at all. The judge separates the two cases,
+        and only a step claiming filing content is B5.
         """
         answer = "x\n\n## Reasoning\n1. [E] Revenue was $391,035M.\n2. [I] So it rose.\n"
         scores = _evaluate(
@@ -244,11 +243,9 @@ class TestValidityScope:
 class TestUnsupportedValueOverride:
     """A figure the judge could not trace settles the verdict mechanically.
 
-    Measured, not defensive: in the sensitivity test of 2026-09-09 the judge
-    caught 3 of 12 planted V1 defects, and its own rationale on one of them
-    read "...and the Total Net Sales, which is assumed". It saw the gap and
-    ruled valid anyway. Moving the decision off its judgement and onto its own
-    bookkeeping took sensitivity from 25% to 75%.
+    A judge sees such a gap ("...and the Total Net Sales, which is assumed")
+    and rules valid anyway; moving the decision off its judgement and onto
+    its own bookkeeping is what makes planted V1 defects detectable.
     """
 
     def test_an_untraceable_input_overrides_a_valid_verdict(self):
@@ -298,9 +295,8 @@ class TestUnsupportedValueOverride:
 class TestFigureVerification:
     """A "grounded" verdict stands only if its figures are in the passages.
 
-    Checked, not trusted: in the pilot the judge confirmed seven steps the
-    rater rejected, each time asserting the passage "contains" a derived ratio
-    no 10-K states. Verifying the figures took kappa from 0.21 to 0.68.
+    Checked, not trusted: a judge will assert that a passage "contains" a
+    derived ratio no 10-K states.
     """
 
     def test_a_figure_absent_from_the_passage_overrules_the_judge(self):

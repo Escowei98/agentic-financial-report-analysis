@@ -1,13 +1,5 @@
 # System 4 — Multi-Agent Long Context: Architektur
 
-**Status:** implementiert. Diese Datei beschreibt den *umgesetzten* Stand.
-
-> Historie: Die ursprüngliche Fassung dieser Datei spezifizierte fest
-> unternehmensgebundene Specialists (ein Agent je Ticker). Diese Variante wurde
-> am 2026-07-25 zugunsten **parametrisierter Specialists** verworfen — siehe
-> [SYS4_MULTI_AGENT_LOG.md](../../../docs/decisions/SYS4_MULTI_AGENT_LOG.md).
-> Der alte Text ist über die Git-Historie dieser Datei erreichbar.
-
 ## Prinzip
 
 S4 unterscheidet sich von S3 ausschließlich über die **Topologie**
@@ -57,9 +49,7 @@ S4 teilt Kette, Verdict-Schema, Feedback-Erzeugung und die Single-Pass-Policy
 mit S2/S3 ([`src/common/reflection.py`](../../common/reflection.py)), nutzt aber
 nicht `run_reflection_pass`: Die Korrekturrunde ist eine bedingte Graph-Kante
 zurück zum Synthesizer, der einen frischen Agenten mit genau einer Nachricht
-aufruft — es wird keine Tool-Call-Historie erneut gesendet. Der
-Thought-Signature-Guard aus `run_reflection_pass` ist hier deshalb
-gegenstandslos.
+aufruft — es wird keine Tool-Call-Historie erneut gesendet.
 
 ## Zusatzmetriken je Query
 

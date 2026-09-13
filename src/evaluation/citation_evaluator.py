@@ -16,9 +16,8 @@ pattern in custom_evaluator.py:
      section-keyword mentions in prose. This directly targets the same
      question the LLM judge would otherwise be asked ("does the wording
      make clear which company/year/section this comes from?"), just via
-     keyword matching instead of a judge call — shrinking how often that
-     (measurably noisy, see docs/decisions/EVAL_DECISION_LOG.md) fallback
-     is needed at all.
+     keyword matching instead of a judge call, which shrinks how often the
+     noisier judge fallback is needed at all.
   Both deterministic tiers score against the gold standard with
   Precision/Recall/F1. Both are group-aware: doc ids are scored against
   `doc_id_groups` (a fiscal year is often carried by more than one filing,
@@ -85,8 +84,8 @@ class CitationEvalResult:
 # ---------------------------------------------------------------------------
 #  Deterministic structured-citation parser
 #
-#  Matches the unified "(TICKER, FYYEAR, SECTION_NAME)" format now enforced
-#  by all four systems' prompts (S1: src/systems/rag_monolith/pipeline.py,
+#  Matches the unified "(TICKER, FYYEAR, SECTION_NAME)" format enforced by
+#  all four systems' prompts (S1: src/systems/rag_monolith/pipeline.py,
 #  S2: src/systems/rag_agent/agent.py, S3: src/systems/long_context/prompt.py,
 #  S4: src/systems/multi_agent/prompts.py).
 # ---------------------------------------------------------------------------
@@ -104,7 +103,7 @@ _CITATION_RE = re.compile(
 # Free-text section name -> canonical source_section id(s) it satisfies.
 # Grounded in the actual section vocabulary the systems can cite (see
 # src/common/ingestion.py SECTION_PATTERNS / TENK_DIRECT_ATTRS) and the
-# gold standard's controlled vocabulary (data/gold_standard/gold_standard_v3.csv:
+# gold standard's controlled vocabulary (`source_sections`:
 # item_1, item_7, item_8_income_stmt, item_8_balance_sheet, item_8_cash_flow,
 # item_8_segment). More specific aliases are listed before the "financial
 # statements"/"item 8" catch-alls so a specific sub-section match wins.
@@ -286,11 +285,10 @@ def _score_docs(expected_groups: list[list[str]], parsed_doc_ids: list[str]):
     holds the filings that are interchangeable for one fact, and citing ANY
     member satisfies it.
 
-    Scoring the flat union instead punishes a correct answer: an FA-3 item
-    listing three filings marked a system down to 2/3 recall for answering
-    correctly out of two, which is exactly what the column was added to
-    prevent. Recall counts satisfied groups; precision counts cited filings
-    that belong to some group.
+    Scoring the flat union instead would punish a correct answer: an FA-3
+    item listing three filings would mark a system down to 2/3 recall for
+    answering correctly out of two. Recall counts satisfied groups;
+    precision counts cited filings that belong to some group.
     """
     if not expected_groups:
         return SetOverlapResult(precision=0.0, recall=0.0, f1=0.0)
@@ -316,9 +314,9 @@ def _score_deterministic(item, parsed: list[dict], tier: str = "structured") -> 
     section_id_sets = [c["section_ids"] for c in parsed]
     parsed_section_ids = sorted({sid for ids in section_id_sets for sid in ids})
 
-    # v4 records acceptable alternatives per fact in `doc_id_groups`; older
-    # files have none, and there each doc id stands alone as its own group,
-    # which reduces exactly to the previous flat set-overlap behaviour.
+    # `doc_id_groups` records acceptable alternatives per fact; without it
+    # each doc id stands alone as its own group, which reduces exactly to a
+    # flat set overlap.
     expected_groups = item.doc_id_groups or [[d] for d in sorted(set(item.doc_ids))]
     doc_res = _score_docs(expected_groups, parsed_doc_ids)
     section_precision, section_recall, section_f1 = _score_sections(

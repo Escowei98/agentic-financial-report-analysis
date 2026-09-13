@@ -165,9 +165,12 @@ class TestRunReflectionPass:
     Shared single-pass reflection + correction round (S2 and S3).
 
     The re-invoke guard is the reason this lives in `common`: S2 and S3 both
-    resend the full message history including prior tool calls, so both are
-    exposed to the same Vertex AI thought-signature round-trip failure. When
-    it was implemented per system, only S3 had the guard.
+    resend the full message history, so both are exposed to the same failure
+    mode.
+
+    An empty AIMessage serialises to a Gemini Content with zero parts. It is
+    filtered out before the re-invoke; the try/except is the net for other
+    errors, mainly 429.
     """
 
     @staticmethod
@@ -250,8 +253,8 @@ class TestRunReflectionPass:
         """A non-retrieval system must be able to say what its tool outputs are.
 
         Without it the verifier reads a bare `calculate` return under the
-        heading "Retrieved source contexts" and rules every claim ungrounded —
-        the defect that drove S3's correction_rate to 0.75 on 2026-09-08.
+        heading "Retrieved source contexts" and rules every claim ungrounded,
+        forcing spurious revisions.
         """
         from langchain_core.messages import ToolMessage
         chain = self._chain("accept")
@@ -281,3 +284,88 @@ class TestRunReflectionPass:
         ]
         self._run(MagicMock(), chain, messages=msgs)
         assert chain.invoke.call_args[0][0]["contexts"] == "AAPL FY2024 revenue was $391,035M"
+
+
+class TestSerialisesToZeroParts:
+    """
+    The filter that keeps the revision re-invoke from being rejected by Vertex.
+
+    An AIMessage with no text, no tool calls and no function_call produces a
+    Gemini Content with zero parts; resending it raises
+    `400 ... must include at least one parts field`, which would cost the
+    query its answer.
+    """
+
+    def test_wholly_empty_ai_message_is_dropped(self):
+        from src.common.reflection import _serialises_to_zero_parts
+        assert _serialises_to_zero_parts(AIMessage(content="")) is True
+
+    def test_whitespace_only_ai_message_is_dropped(self):
+        from src.common.reflection import _serialises_to_zero_parts
+        assert _serialises_to_zero_parts(AIMessage(content="   \n ")) is True
+
+    def test_ai_message_with_text_is_kept(self):
+        from src.common.reflection import _serialises_to_zero_parts
+        assert _serialises_to_zero_parts(AIMessage(content="an answer")) is False
+
+    def test_empty_ai_message_with_tool_calls_is_kept(self):
+        """A function_call is itself a part, so such a message is harmless."""
+        from src.common.reflection import _serialises_to_zero_parts
+        msg = AIMessage(
+            content="",
+            tool_calls=[{"name": "calculate", "args": {"expression": "1+1"}, "id": "c1"}],
+        )
+        assert _serialises_to_zero_parts(msg) is False
+
+    def test_empty_ai_message_with_function_call_kwarg_is_kept(self):
+        from src.common.reflection import _serialises_to_zero_parts
+        msg = AIMessage(
+            content="",
+            additional_kwargs={"function_call": {"name": "calculate", "arguments": "{}"}},
+        )
+        assert _serialises_to_zero_parts(msg) is False
+
+    def test_non_ai_messages_are_never_dropped(self):
+        from src.common.reflection import _serialises_to_zero_parts
+        assert _serialises_to_zero_parts(HumanMessage(content="")) is False
+
+
+class TestRevisionDropsEmptyMessages(TestRunReflectionPass):
+    """
+    End-to-end behaviour of the filter inside `run_reflection_pass`.
+
+    Inherits the chain/run helpers from TestRunReflectionPass.
+    """
+
+    def test_empty_draft_message_is_not_resent(self):
+        agent = MagicMock()
+        agent.invoke.return_value = {"messages": [AIMessage(content="revised")]}
+        history = [
+            HumanMessage(content="What was AAPL FY2024 revenue?"),
+            AIMessage(content=""),  # the empty draft that broke the re-invoke
+        ]
+        _, _, was_revised, _, _ = self._run(
+            agent, self._chain("revise", "Answer the question.", ["incomplete"]),
+            messages=history,
+        )
+        sent = agent.invoke.call_args[0][0]["messages"]
+        assert was_revised is True
+        assert not any(
+            isinstance(m, AIMessage) and not m.content for m in sent
+        ), "an empty AIMessage was resent despite the filter"
+        assert sent[0].content == "What was AAPL FY2024 revenue?"
+
+    def test_history_with_tool_calls_is_resent_unchanged(self):
+        """S2's usual shape must be untouched: it had no failures in run1."""
+        agent = MagicMock()
+        agent.invoke.return_value = {"messages": [AIMessage(content="revised")]}
+        tool_call = AIMessage(
+            content="",
+            tool_calls=[{"name": "retrieve", "args": {"q": "revenue"}, "id": "t1"}],
+        )
+        history = [HumanMessage(content="q"), tool_call, AIMessage(content="draft")]
+        self._run(
+            agent, self._chain("revise", "Fix.", ["x"]), messages=history,
+        )
+        sent = agent.invoke.call_args[0][0]["messages"]
+        assert len(sent) == len(history) + 1, "the filter dropped a valid message"

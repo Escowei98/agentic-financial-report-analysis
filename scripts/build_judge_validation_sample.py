@@ -10,19 +10,14 @@ Produces two files under data/results/judge_validation/:
     real system name and the judge's scores + rationales. Do NOT open this
     until the blind CSV has been fully rated.
 
-See docs/decisions/EVAL_DECISION_LOG.md [2026-08-01] for the full protocol
-(metric scope, blind protocol, trust thresholds, remediation plan).
-
 REASONING RATINGS ARE PER UNIT, NOT PER DIMENSION
 -------------------------------------------------
-The retired instrument asked for five 1-5 scores per record. It reached
-weighted kappa 0.03-0.17, and the diagnosis was not that raters disagreed
-about the chains but that an unanchored five-point scale gives them nothing to
-agree on. The rating unit is now a single step, a single transition or a
-single required sub-question, and the answer is yes or no.
+The rating unit is a single step, a single transition or a single required
+sub-question, and the answer is yes or no; an unanchored 1-5 scale per
+record would give raters nothing to agree on.
 
-A record therefore no longer carries a fixed number of rating cells, so the
-three reasoning columns hold JSON maps from unit index to 0/1 rather than a
+A record therefore carries no fixed number of rating cells, so the three
+reasoning columns hold JSON maps from unit index to 0/1 rather than a
 scalar. `chain_json` and `evidence_json` carry what the rater needs to decide
 them -- the evidence being the passages THE JUDGE SAW, carried over from the
 run rather than re-fetched, so that rater and judge are answering the same
@@ -50,11 +45,10 @@ BLIND_FIELDS = [
     "ground_truth",
     "answer",
     "trajectory",
-    # Item metadata, not a rating target. Needed by build_human_rating_ui.py
-    # to pick the same subtype/evidence-conditioned rubric the judge used for
-    # THIS item (see get_refusal_quality_prompt / get_evidence_clause /
-    # _classify_answer_type in custom_evaluator.py) -- none of it reveals a
-    # judge score.
+    # Item metadata, not a rating target: lets the rater apply the same
+    # subtype/evidence-conditioned rubric the judge used for THIS item (see
+    # get_refusal_quality_prompt / get_evidence_clause / _classify_answer_type
+    # in custom_evaluator.py). None of it reveals a judge score.
     "subtype",
     "refusal_evidence",
     "gt_correction",
@@ -175,9 +169,8 @@ def main():
                     reasoning.get("chain_emitted")
                     and reasoning.get("num_evidential", 0) > 0
                 ),
-                # Only transitions into an inferential step are assessable
-                # (see EVAL_DECISION_LOG.md [2026-09-09]); a chain that is all
-                # lookups has none.
+                # Only transitions into an inferential step are assessable;
+                # a chain that is all lookups has none.
                 "validity_human": _open_if(
                     reasoning.get("chain_emitted")
                     and any(

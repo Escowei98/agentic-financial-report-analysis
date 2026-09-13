@@ -177,9 +177,8 @@ class TestComputeFilingsHash:
 
     def test_hash_changes_when_section_text_changes(self):
         """A re-parsed filing keeps its accession number but must not keep
-        its cache. GOOGL FY2024 was re-ingested on 2026-09-06 after its
-        Risk Factors and MD&A had been truncated; an identity-only key
-        would have kept S1/S2 on the broken chunks.
+        its cache; an identity-only key would keep S1/S2 on stale chunks
+        after a corpus repair.
         """
         broken = self._make_filing("GOOGL", "0001652044-25-000014", {"MD&A": "stub"})
         repaired = self._make_filing(

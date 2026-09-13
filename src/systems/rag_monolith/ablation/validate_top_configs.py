@@ -125,7 +125,7 @@ def validate_top_configs(
             total_latency += result.metrics.latency_seconds
             total_tokens += result.metrics.token_usage.total_tokens
 
-        # Evaluate with RAGAS (now with max_output_tokens=16384)
+        # Evaluate with RAGAS
         scores = evaluate_run(
             gold_standard=gold_standard,
             answers=answers,

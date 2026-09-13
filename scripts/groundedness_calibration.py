@@ -3,22 +3,17 @@ Measure the groundedness judgement against the human labels already collected.
 
 WHY THIS EXISTS
 ---------------
-The pilot put groundedness at kappa 0.21 with 86% raw agreement, and the
-confusion matrix showed the problem is not prevalence alone:
+A low kappa on groundedness with high raw agreement means the judge misses
+the steps the rater called NOT grounded. A larger sample cannot fix that:
+kappa is a function of the proportions in the confusion matrix, not of n.
+What moves it is detection, so the judge prompt needs a bench, not more
+data.
 
-    on the 97 steps the rater called grounded, the judge agreed on 89 (92%)
-    on the 10 steps the rater called NOT grounded, it agreed on 3 (30%)
-
-A larger sample cannot fix that. Kappa is a function of the proportions in
-that matrix, not of n -- doubling the items at an unchanged detection rate
-returns the same 0.21 with a narrower confidence interval around it. What
-moves it is detection, so what is needed is a bench, not more data.
-
-This replays the stored pilot chains against the CURRENT prompt and scores
-the result against the human labels. The passages come from `evidence_shown`
-in the run output, not from a fresh corpus lookup, so the judge sees exactly
-what it saw the first time and a change in the numbers can only come from the
-change under test.
+This replays the stored validation chains against the CURRENT prompt and
+scores the result against the human labels. The passages come from
+`evidence_shown` in the run output, not from a fresh corpus lookup, so the
+judge sees exactly what it saw the first time and a change in the numbers
+can only come from the change under test.
 
 Usage:
     uv run python scripts/groundedness_calibration.py
@@ -191,26 +186,20 @@ def main() -> int:
 
 
 # ---------------------------------------------------------------------------
-#  Re-judging the stored pilot with the current instrument
+#  Re-judging the stored sample with the current instrument
 # ---------------------------------------------------------------------------
 
 def rejudge() -> int:
     """Rewrite the reasoning verdicts in the reference file, judged afresh.
 
-    The pilot ran at 23:41 on 2026-09-08; the groundedness repair landed the
-    next day. So `validation_report_reserve.md` kept reporting kappa 0.21 for
-    a prompt that no longer exists, while the bench measured 0.68 for the one
-    that does -- two numbers for the same dimension, and the published one was
-    the wrong one.
+    Keeps `validation_report_reserve.md` in step with the judge prompt that
+    is actually in use. Re-judging is legitimate here and would not be after
+    a system change: the CHAINS do not move. They are stored verbatim in the
+    run output, the human labels were given against them, and only the judge
+    that reads them changes. Re-running the systems instead would produce
+    different chains and invalidate every human label collected.
 
-    Re-judging is legitimate here and would not be after a system change: the
-    CHAINS do not move. They are stored verbatim in the run output, the human
-    labels were given against them, and only the judge that reads them has
-    changed. Re-running the systems instead would produce different answers,
-    different chains, and would invalidate every human label collected.
-
-    `judge_custom` and `judge_citation` are left alone -- the refusal prompt
-    was already repaired before the pilot ran, so those verdicts are current.
+    `judge_custom` and `judge_citation` are left alone.
     """
     import shutil
 

@@ -9,26 +9,21 @@ everywhere, never copy-pasted.
 
 WHY THIS EXISTS
 ---------------
-Until 2026-09-09, S2 and S3 each carried three worked examples in their
-system prompt -- question, tool pattern, model answer with citation -- while
-S4 carried none in any of its three nodes and S1 carried none at all. Worked
-examples steer exactly the things the metrics read: citation form
+Worked examples steer exactly the things the metrics read: citation form
 (`citation_accuracy`), whether arithmetic goes through `calculate`
-(`exact_match` on FA-3/FA-4), and the shape of the answer. The three shared
-conventions were symmetric by construction; the examples were not, because
-they had never been treated as a shared component. For the S3-vs-S4
-comparison (FF3) that is a confounder pointing in S3's favour, on the very
-question the multi-agent design is meant to answer.
+(`exact_match` on FA-3/FA-4), and the shape of the answer. If one system
+carried examples and another did not, that difference would confound the
+comparison on the very questions the architectures are meant to answer,
+so the examples are a shared component like the three conventions.
 
 WHAT IS SHARED AND WHAT IS NOT
 ------------------------------
 Shared: the three scenarios -- the user question and the model answer,
 byte-identical in every prompt. They mirror the answerable strata the gold
 standard actually contains (single fact, cross-company comparison with
-arithmetic, multi-year trend). S2's former third example (an exploratory
-`retrieve_chunks` question) is dropped: the gold standard holds no
-exploratory item, and the scenario cannot be expressed for a system without
-a search tool.
+arithmetic, multi-year trend). There is no exploratory-search scenario: the
+gold standard holds no such item, and it could not be expressed for a
+system without a search tool.
 
 Per system: the step lines between question and answer. A retrieval agent
 calls `search_section`, a long-context agent reads its inlined filings, a
@@ -46,8 +41,6 @@ S1 renders through `ChatPromptTemplate`, S4's supervisor and specialist
 through `str.format`. A brace in a scenario would raise at render time in
 some systems and not others. Guarded by
 tests/test_systems/test_component_symmetry.py.
-
-See EVAL_DECISION_LOG.md [2026-09-09] "Few-Shot-Beispiele symmetrisiert".
 """
 
 from __future__ import annotations

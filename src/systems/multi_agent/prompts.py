@@ -18,9 +18,9 @@ which would make the FA-Refusal comparison measure a prompt-placement
 artefact instead of the multi-agent topology H3 is about.
 
 REASONING_CHAIN_CONVENTION sits in the Synthesizer ALONE. It is the node that
-emits the answer under evaluation, and the spec measures the derivation that
-carries the final answer, not the orchestration around it
-(REASONING_QUALITY_SPEC.md section 4.4). Giving it to the specialists as well
+emits the answer under evaluation, and the metric measures the derivation
+that carries the final answer, not the orchestration around it. Giving it to
+the specialists as well
 would produce one chain per specialist plus the synthesizer's -- S4 would be
 the only architecture emitting several competing chains per question, and
 whichever one the parser picked would be an instrumentation choice rather than
@@ -36,9 +36,8 @@ output and therefore cannot relay the Supervisor's specific diagnosis -- it
 falls back on the convention with only the question in hand. That is the
 context isolation H3 examines, and it is reported, not engineered around. The
 same path can leave S4 without a reasoning chain on such an item; that is
-harmless for the metric, which is computed on the answerable stratum only
-(REASONING_QUALITY_SPEC.md section 8.4), but it is counted in
-`chain_emission_rate` either way.
+harmless for the metric, which is computed on the answerable stratum only,
+but it is counted in `chain_emission_rate` either way.
 """
 
 from __future__ import annotations

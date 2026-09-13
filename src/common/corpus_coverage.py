@@ -11,18 +11,10 @@ from alternating fiscal years (FY2020/2022/2024, see configs/base.yaml) on
 purpose, so FY2023 exists in the corpus only as a comparative column of the
 FY2024 filing -- and 22 answerable gold-standard items ask about such a year.
 
-Until 2026-09-09 only the judge knew this: `custom_evaluator._corpus_scope_sentence`
-tells it that comparative columns are in scope, so it would not score a
-correct FY2023 answer as a hallucination. The systems were told the opposite,
-implicitly: `list_filings` listed "AAPL (FY2024)", `search_section` filtered
-on the filing year and returned "No chunks found" for FY2023, and the
-non-answerability convention asked them to name "which fiscal years" are
-available. All four systems then declined FY2023 questions as out of scope
-(smoke test 2026-09-09, id 5: 4 of 4; pilot ids 20/24: S2 4 of 4, S4 3 of 4).
-
-That is not a property of the architectures; it is a corpus description that
-differs between the measuring instrument and the objects measured. This module
-is the single description both sides use.
+If only the judge knew this, a system that declines an FY2023 question as
+out of scope would be scored against a corpus description it was never
+given. That would be a property of the instrumentation, not of the
+architectures. This module is the single description both sides use.
 
 WHAT IS AND IS NOT SAID
 -----------------------
@@ -37,9 +29,8 @@ from __future__ import annotations
 
 from typing import Iterable
 
-# Coverage windows, in fiscal years including the filing's own. Regulation is
-# the prior, `scripts/remap_gold_standard_docids.py` holds the empirical
-# confirmation on this corpus; the conservative window is used where a
+# Coverage windows, in fiscal years including the filing's own, as
+# prescribed by Regulation S-X; the conservative window is used where a
 # statement's coverage varies by company (MD&A).
 STATEMENT_WINDOW_YEARS = 3   # income statement, cash flow, segment note
 BALANCE_SHEET_WINDOW_YEARS = 2

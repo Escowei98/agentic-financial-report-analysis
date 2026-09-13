@@ -3,14 +3,10 @@ Shared parsing of LangGraph agent message histories (S2, S3, S4).
 
 Every agentic system needs the same four things out of a finished agent run:
 the final answer, a tool-call log, the tool outputs, and the aggregated token
-usage. That loop previously existed five times — as a private method on the
-S2 and S3 pipelines and inline three times inside the S4 node functions — with
-identical semantics but drifting comments and annotations.
-
-The token figures feed NF-5 (efficiency) and the tool-call log feeds both the
-process metrics and the judge-facing trajectory (thesis 3.6.2), so a silent
-divergence between these copies would have shown up as an architectural
-difference in the results. One implementation removes that failure mode.
+usage. The token figures feed NF-5 (efficiency) and the tool-call log feeds
+the process metrics and the trajectory rendering, so a divergence between
+per-system copies of this loop would show up as an architectural difference
+in the results. One implementation removes that failure mode.
 """
 
 import logging

@@ -91,7 +91,7 @@ def calculate_cost_per_correct_answer(
         right has an undefined cost per correct answer, and 0.0 sorts as the
         best value in the comparison table — the one place the number is
         actually read. Callers must render ``None`` as "not defined", never as
-        a zero. See EVAL_DECISION_LOG.md [2026-09-06].
+        a zero.
     """
     num_correct = sum(1 for score in correctness_scores if score >= threshold)
     if num_correct == 0:

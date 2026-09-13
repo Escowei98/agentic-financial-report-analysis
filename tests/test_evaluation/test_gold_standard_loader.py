@@ -76,10 +76,10 @@ class TestLoadGoldStandard:
 # and the FY2022 one's comparative columns), FY2024 by only one — so citing
 # either member of the first group is correct.
 SAMPLE_CSV_V4 = """\
-id;fa_type;subtype;doc_ids;doc_id_groups;query;gt_value;gt_unit;source_sections;expected_answerable;difficulty;math_type;entity_form;hypothesis_link;rationale;window_class
-1;FA-1;basis_kpi;AAPL_2024;AAPL_2024;Total revenue FY2024?;$391.0 billion;usd_billion;item_8_income_stmt;true;easy;n/a;ticker;H1;Basis KPI;
-2;FA-Refusal;not_in_corpus;AAPL_2024;AAPL_2024;Revenue in FY2019?;;n/a;;false;medium;n/a;name;;Out of scope;
-3;FA-3;growth_yoy;AAPL_2020|AAPL_2022|AAPL_2024;AAPL_2020+AAPL_2022|AAPL_2024;Revenue growth FY2020 to FY2024?;+42.4%;percent;item_8_income_stmt;true;hard;yoy;name;H2|H3;Cross window;cross_window
+id;fa_type;subtype;doc_ids;doc_id_groups;query;gt_value;gt_unit;source_sections;expected_answerable;math_type;entity_form;hypothesis_link;rationale;window_class
+1;FA-1;basis_kpi;AAPL_2024;AAPL_2024;Total revenue FY2024?;$391.0 billion;usd_billion;item_8_income_stmt;true;n/a;ticker;H1;Basis KPI;
+2;FA-Refusal;not_in_corpus;AAPL_2024;AAPL_2024;Revenue in FY2019?;;n/a;;false;n/a;name;;Out of scope;
+3;FA-3;growth_yoy;AAPL_2020|AAPL_2022|AAPL_2024;AAPL_2020+AAPL_2022|AAPL_2024;Revenue growth FY2020 to FY2024?;+42.4%;percent;item_8_income_stmt;true;yoy;name;H2|H3;Cross window;cross_window
 """
 
 
@@ -108,9 +108,9 @@ class TestLoadGoldStandardV4:
         v3 = tmp_path / "v3.csv"
         v3.write_text(
             "id;fa_type;subtype;doc_ids;query;gt_value;gt_unit;source_sections;"
-            "expected_answerable;difficulty;math_type;entity_form;hypothesis_link;rationale\n"
+            "expected_answerable;math_type;entity_form;hypothesis_link;rationale\n"
             "1;FA-1;basis_kpi;AAPL_2024;Total revenue FY2024?;$391.0 billion;usd_billion;"
-            "item_8_income_stmt;true;easy;n/a;ticker;H1;Basis KPI\n",
+            "item_8_income_stmt;true;n/a;ticker;H1;Basis KPI\n",
             encoding="utf-8",
         )
         item = load_gold_standard(v3)[0]
@@ -123,13 +123,10 @@ class TestLoadGoldStandardV4:
         assert len(load_gold_standard(csv_v4, filter_answerable=False)) == 1
 
     def test_no_expected_tools_field(self):
-        """The deterministic tool-selection metric stays removed.
+        """There is no tool-selection column.
 
-        `expected_tools` was introduced, removed on 2026-08-15 because a
-        shared expected tool set penalises S3/S4 for tools they cannot have,
-        briefly reinstated, and dropped again on 2026-09-06. This pins the
-        decision so a future reader does not re-add the field by accident;
-        the corresponding data-side guard lives in
+        A shared expected tool set would penalise S3/S4 for tools they cannot
+        have, so tool selection is out of scope. The data-side guard lives in
         scripts/validate_gold_standard.py.
         """
         from dataclasses import fields

@@ -4,8 +4,7 @@ What is being pinned here is a fairness property, not a convenience: every
 system's steps must be checked against passages fetched by the same
 procedure, in the same quantity, from the same corpus. The moment the
 evidence depends on how the system found it, groundedness starts measuring
-retrieval again -- which is the coupling that produced the 2.75-point
-differential bias in the retired instrument.
+retrieval again.
 """
 
 from unittest.mock import patch

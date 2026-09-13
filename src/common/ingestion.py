@@ -1057,12 +1057,10 @@ def download_all_filings(
     list is NOT the same as passing None: it yields an empty corpus, which
     is treated as a configuration error and raises.
 
-    Note on why this iterates fiscal years at all: `download_filing(ticker)`
-    without a fiscal year returns only the single most recent filing per
-    company. Every evaluation entry point calls this function, so a missing
-    year loop silently shrinks the corpus for all four systems at once —
-    which is exactly what happened to the first full n=150 run (it executed
-    against 4 filings instead of 12, see docs/decisions/DATA_DECISION_LOG.md).
+    `download_filing(ticker)` without a fiscal year returns only the single
+    most recent filing per company. Every evaluation entry point calls this
+    function, so the year loop is what keeps the corpus at 12 filings for all
+    four systems; `scripts/validate_gold_standard.py` asserts that.
     """
     config = load_config()
     companies = config.get("companies", [])

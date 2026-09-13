@@ -77,9 +77,8 @@ def test_evaluate_custom_metrics_refusal():
 
 
 # ---------------------------------------------------------------------------
-#  Deterministic numeric pre-check (regression tests for the R011/R031/R026
-#  cases found during human judge-validation, see
-#  EVAL_DECISION_LOG.md [2026-08-01])
+#  Deterministic numeric pre-check (unit/rounding equivalences an LLM judge
+#  gets wrong)
 # ---------------------------------------------------------------------------
 
 def test_deterministic_match_million_vs_billion():
@@ -359,11 +358,9 @@ class TestNormalizeToBaseStrictness:
 
 
 class TestRefusalPromptCorpusScope:
-    """The refusal prompt used to hard-code "FY2022, FY2023 and FY2024 ONLY".
-    The corpus moved to FY2020/FY2022/FY2024 on 2026-09-05 and the prompt did
-    not follow, so the judge rewarded a refusal on a question the corpus could
-    answer — across the whole 30-item refusal stratum. It is derived from
-    configs/base.yaml now. See EVAL_DECISION_LOG.md [2026-09-06].
+    """The refusal prompt's corpus scope is derived from configs/base.yaml.
+    A hard-coded scope could drift from the corpus and make the judge reward
+    a refusal on a question the corpus can answer.
     """
 
     def test_scope_names_the_configured_fiscal_years(self):
@@ -588,14 +585,12 @@ class TestUndefinedMetricsSerializeAsNone:
 
 
 class TestRefusalAccuracyPromptFix:
-    """The 2026-09-07 differential defect, pinned so it cannot come back.
+    """The judge is shown a grounded reference for premise corrections.
 
-    On `false_premise` items the judge scored S3 and S4 0.0 for correctly
-    rectifying the premise while S1 and S2 got 1.0 for a terser "not
-    mentioned". The mechanism was that rule 5 asked the judge to decide
-    groundedness without showing it anything to check against, so a longer
-    answer simply offered more surface to suspect -- penalising the more
-    informative response, and doing so differentially by architecture.
+    Without one, rule 5 would ask the judge to decide groundedness with
+    nothing to check against, so a longer answer simply offers more surface
+    to suspect: a correct correction scores below a terse "not mentioned",
+    and it does so differentially by architecture.
     """
 
     def test_the_prompt_carries_a_reference_to_check_against(self):

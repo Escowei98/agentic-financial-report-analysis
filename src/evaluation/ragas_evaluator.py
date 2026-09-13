@@ -33,21 +33,11 @@ from src.evaluation.gold_standard_loader import GoldStandardItem
 logger = logging.getLogger(__name__)
 
 # The five RAGAS metrics, as CLASSES. Instances are created per evaluate_run
-# call by `build_metrics` below -- never shared.
-#
-# Until 2026-09-09 this module used ragas' pre-instantiated module-level
-# singletons (`ragas.metrics._faithfulness.faithfulness` etc.). ragas'
-# `evaluate()` binds llm/embeddings onto whatever metric objects it is handed,
-# calls `metric.init()` (which, for AnswerCorrectness, creates the nested
-# AnswerSimilarity), and RESETS those attributes when it returns, so the
-# caller's objects are left as it found them. With the four systems evaluated
-# concurrently, the first `evaluate()` to finish reset the shared
-# AnswerCorrectness while the others were still scoring with it:
-# `AssertionError: AnswerSimilarity must be set`, the item's
-# answer_correctness becomes NaN, and the item drops out of a metric mapped
-# to H1-H3 -- for whichever system happened to lose the race. Seen twice in
-# the 2026-09-07 smoke test and twice in the 2026-09-09 one, never in the
-# sequential n=150 run. See EVAL_DECISION_LOG.md [2026-09-09].
+# call by `build_metrics` below, never shared: ragas' `evaluate()` binds
+# llm/embeddings onto the metric objects it is handed and resets them on
+# return, so with several systems evaluated concurrently a shared instance
+# is reset under another caller's feet ("AnswerSimilarity must be set") and
+# that item's score silently becomes NaN.
 ABLATION_METRIC_CLASSES: tuple[type[Metric], ...] = (
     ContextPrecision,
     ContextRecall,
@@ -62,8 +52,7 @@ ABLATION_METRIC_CLASSES: tuple[type[Metric], ...] = (
 # (context_precision, context_recall, faithfulness) score the
 # `retrieved_contexts` field and are therefore only computed for systems
 # with an observable retrieval step; see eval_runner.py's
-# include_context_metrics decision and
-# docs/decisions/EVAL_DECISION_LOG.md [2026-08-16].
+# include_context_metrics decision.
 ANSWER_METRIC_CLASSES: tuple[type[Metric], ...] = (AnswerRelevancy, AnswerCorrectness)
 
 

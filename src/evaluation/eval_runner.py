@@ -12,6 +12,7 @@ Orchestrates the complete evaluation pipeline for a given system:
 
 import json
 import logging
+import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -21,6 +22,11 @@ from src.evaluation.custom_evaluator import evaluate_custom_metrics
 from src.evaluation.evidence_store import EvidenceStore
 from src.evaluation.gold_standard_loader import GoldStandardItem
 from src.evaluation.process_evaluator import calculate_cost_per_correct_answer
+from src.evaluation.locus_faithfulness import (
+    EXCLUDED_NOT_ANSWERABLE,
+    evaluate_locus_faithfulness_batch,
+    summarise as summarise_locus_faithfulness,
+)
 from src.evaluation.ragas_evaluator import evaluate_run
 from src.evaluation.reasoning_chain_evaluator import (
     ChainReasoningScores,
@@ -46,9 +52,21 @@ logger = logging.getLogger(__name__)
 # observable retrieval step whose output RAGAS could score. Comparable
 # work (FinanceBench, Islam et al. 2023; Li et al. 2024 "RAG or
 # Long-Context LLMs?"; Lithgow-Serrano et al. 2025 FinDoc-RAG) evaluates
-# such conditions purely on final-answer metrics for the same reason —
-# see docs/decisions/EVAL_DECISION_LOG.md [2026-08-16].
+# such conditions purely on final-answer metrics for the same reason.
 SYSTEMS_WITHOUT_MEANINGFUL_CONTEXT_METRICS = {"long_context", "multi_agent"}
+
+# Attempts per query before it counts as failed, and the base of the
+# exponential backoff between them.
+#
+# A query that dies on a transient endpoint error is dropped from every
+# average (see the failed-queries note below), which silently changes the
+# base a system is measured on. Retrying is applied identically to all four
+# systems, so it introduces no asymmetry, but it does blur the line between
+# "the endpoint hiccuped" and "this system fails more often". Every attempt
+# is therefore counted and reported: per item in `query_attempts`, per run
+# in `summary.retried_query_ids` / `summary.retried_queries`.
+QUERY_MAX_ATTEMPTS = 3
+RETRY_BASE_SECONDS = 5.0
 
 
 # gt_units that denote a figure exact_match can actually rule on. "text" and
@@ -69,6 +87,38 @@ def _round_or_none(value: float | None) -> float | None:
     return round(value, 4) if value is not None else None
 
 
+def _query_with_retry(
+    pipeline: Any,
+    system_name: str,
+    item: GoldStandardItem,
+    max_attempts: int,
+) -> tuple[Any, int]:
+    """Run one query, retrying transient failures with exponential backoff.
+
+    Returns the result (None if every attempt failed) and the number of
+    attempts made. KeyboardInterrupt and SystemExit are BaseExceptions and
+    deliberately not caught: a run of this size has to stay interruptible.
+    """
+    last_exc: Exception | None = None
+    for attempt in range(1, max_attempts + 1):
+        try:
+            return pipeline.query(item.question), attempt
+        except Exception as exc:  # noqa: BLE001 — retried, then reported
+            last_exc = exc
+            if attempt < max_attempts:
+                delay = RETRY_BASE_SECONDS * 2 ** (attempt - 1)
+                logger.warning(
+                    "[%s] Query failed for id=%d (attempt %d/%d): %s — retrying in %.0fs",
+                    system_name, item.id, attempt, max_attempts, exc, delay,
+                )
+                time.sleep(delay)
+    logger.error(
+        "[%s] Query failed for id=%d after %d attempts: %s",
+        system_name, item.id, max_attempts, last_exc,
+    )
+    return None, max_attempts
+
+
 def run_full_evaluation(
     pipeline: Any,
     system_name: str,
@@ -76,6 +126,7 @@ def run_full_evaluation(
     output_dir: str | Path,
     evidence_store: EvidenceStore | None = None,
     keep_evidence: bool = False,
+    max_attempts: int = QUERY_MAX_ATTEMPTS,
 ) -> dict:
     """
     Run the full evaluation suite on a given system.
@@ -94,6 +145,9 @@ def run_full_evaluation(
                   verdicts. Needed to build a human-validation sample that
                   shows raters the same evidence; off for production runs,
                   where it would multiply the result JSON several times over.
+        max_attempts: Attempts per query before it counts as failed, applied
+                  identically to every system. 1 disables retrying. Every
+                  attempt is counted and reported (see QUERY_MAX_ATTEMPTS).
         
     Returns:
         A dictionary containing the full evaluation results and summary.
@@ -104,35 +158,41 @@ def run_full_evaluation(
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     out_file = output_dir / f"eval_{system_name}_{timestamp}.json"
 
-    results = []
-    answers = []
-    contexts = []
+    results: list[Any] = []
+    answers: list[str] = []
+    contexts: list[list[str]] = []
     total_cost_usd = 0.0
 
     logger.info("Starting evaluation for %s on %d items...", system_name, len(gold_items))
 
     # 1. Run the system
+    #
+    # Attempts per item are kept for every item, failed ones included: only
+    # `total_cost_usd` sees the successful attempts, because a system's own
+    # metrics object is the only cost signal there is and a crashed attempt
+    # never produces one. The provider was still billed for it, so a run with
+    # many retries costs more than its reported total says.
+    attempts_by_id: dict[int, int] = {}
     for i, item in enumerate(gold_items):
         logger.info("[%s] Processing %d/%d (id=%d)", system_name, i + 1, len(gold_items), item.id)
-        try:
-            res = pipeline.query(item.question)
-            results.append(res)
+        res, attempts = _query_with_retry(pipeline, system_name, item, max_attempts)
+        attempts_by_id[item.id] = attempts
+        results.append(res)
 
-            # Extract answer and context for RAGAS
-            ans = res.answer if hasattr(res, "answer") else str(res)
-            answers.append(ans)
-
-            ctx = res.contexts if hasattr(res, "contexts") else []
-            contexts.append(ctx)
-
-            if hasattr(res, "metrics") and hasattr(res.metrics, "estimated_cost_usd"):
-                total_cost_usd += res.metrics.estimated_cost_usd
-
-        except Exception as e:
-            logger.error("[%s] Query failed for id=%d: %s", system_name, item.id, e)
-            results.append(None)
+        if res is None:
             answers.append("Error")
             contexts.append([])
+            continue
+
+        # Extract answer and context for RAGAS
+        ans = res.answer if hasattr(res, "answer") else str(res)
+        answers.append(ans)
+
+        ctx = res.contexts if hasattr(res, "contexts") else []
+        contexts.append(ctx)
+
+        if hasattr(res, "metrics") and hasattr(res.metrics, "estimated_cost_usd"):
+            total_cost_usd += res.metrics.estimated_cost_usd
 
     # Split the reasoning chain off every answer BEFORE any other evaluator
     # sees it.
@@ -193,6 +253,32 @@ def run_full_evaluation(
             keep_evidence=keep_evidence,
         )
 
+    # Faithfulness of the final answer against the corpus at the loci it
+    # cites -- the one faithfulness measure defined for all four systems.
+    # Uses the same evidence store as groundedness; without one it stays
+    # excluded rather than silently 0. See locus_faithfulness.py.
+    locus_faithfulness: list[dict]
+    if evidence_store is None:
+        locus_faithfulness = [
+            {"score": None,
+             "excluded": (
+                 EXCLUDED_NOT_ANSWERABLE if not item.expected_answerable
+                 else "no_evidence_store"
+             ),
+             "n_loci": 0, "n_passages": 0, "loci": []}
+            for item in valid_items
+        ]
+    else:
+        logger.info("Running locus faithfulness evaluation...")
+        locus_faithfulness = [
+            r.to_dict() for r in evaluate_locus_faithfulness_batch(
+                [item.question for item in valid_items],
+                valid_answers,
+                [item.expected_answerable for item in valid_items],
+                evidence_store,
+            )
+        ]
+
     logger.info("Running Custom, Citation and Efficiency evaluation...")
     detailed_results = []
     correctness_scores = []
@@ -228,7 +314,7 @@ def run_full_evaluation(
             "subtype": item.subtype,
             # Carried through so the per-query table can break the FA-Refusal
             # stratum down by evidence class without re-joining the gold
-            # standard. Empty on answerable items and on pre-v5 files.
+            # standard. Empty on answerable items.
             "refusal_evidence": item.refusal_evidence,
             # Reference text for the refusal_quality judge, never an expected
             # answer string (gt_value stays empty on FA-Refusal). Carried
@@ -236,12 +322,14 @@ def run_full_evaluation(
             # same reference the judge graded against.
             "gt_correction": item.gt_correction,
             "gt_unit": item.gt_unit,
-            "difficulty": item.difficulty,
             "window_class": item.window_class,
             "expected_answerable": item.expected_answerable,
             "question": item.question,
             "ground_truth": item.ground_truth,
             "answer": ans,
+            # How many attempts this answer took. 1 for everything that
+            # worked first time; anything above it belongs in the report.
+            "query_attempts": attempts_by_id[item.id],
             "trajectory": format_trajectory(res, system_name),
             "custom_metrics": custom_res.to_dict(),
             "citation_metrics": citation_res.to_dict(),
@@ -258,6 +346,7 @@ def run_full_evaluation(
                 metric: _round_or_none(values[i])
                 for metric, values in ragas_scores.per_sample.items()
             },
+            "locus_faithfulness": locus_faithfulness[i],
         }
 
         if hasattr(res, "metrics"):
@@ -273,17 +362,13 @@ def run_full_evaluation(
 
     # Cross-document success rate.
     #
-    # Population: every item that genuinely requires more than one filing —
-    # all of FA-4 plus the FA-3 items marked `cross_window`. FA-4 alone left
-    # out 15 multi-year items whose span does not fit inside one report's
-    # comparative columns, which is precisely what `window_class` was added
-    # to identify.
+    # Population: every item that genuinely requires more than one filing:
+    # all of FA-4 plus the FA-3 items marked `cross_window`, i.e. multi-year
+    # items whose span does not fit inside one report's comparative columns.
     #
-    # Threshold: exact_match only. The old rule also accepted
-    # `answer_recall >= 0.5`, i.e. a partially present answer, and the metric
-    # saturated — S2, S3 and S4 all landed on exactly 28/30. A cross-document
-    # synthesis that is only half right is not a success.
-    # See EVAL_DECISION_LOG.md [2026-09-06].
+    # Threshold: exact_match only. Accepting a partially present answer
+    # (answer_recall >= 0.5) saturates the metric; a cross-document synthesis
+    # that is only half right is not a success.
     cross_doc_items = [
         d for d in detailed_results
         if d["fa_type"] == "FA-4" or d.get("window_class") == "cross_window"
@@ -330,8 +415,12 @@ def run_full_evaluation(
     # successful ones. That silently favours a system that crashes more
     # often, hence the explicit count and id list: any downstream table has
     # to state them, and a run with failures is not comparable to a clean one
-    # without saying so. See EVAL_DECISION_LOG.md [2026-09-06].
+    # without saying so.
     failed_ids = [gold_items[i].id for i, r in enumerate(results) if r is None]
+
+    retried = {
+        str(query_id): n for query_id, n in attempts_by_id.items() if n > 1
+    }
 
     summary = {
         "system_name": system_name,
@@ -339,7 +428,14 @@ def run_full_evaluation(
         "successful_queries": len(valid_indices),
         "failed_queries": len(failed_ids),
         "failed_query_ids": failed_ids,
+        # A system that needed many retries is not the same as one that
+        # needed none, even when both end at 150/150 -- reported so the
+        # difference cannot vanish into an identical success count.
+        "query_max_attempts": max_attempts,
+        "retried_queries": len(retried),
+        "retried_query_ids": retried,
         "ragas_summary": ragas_scores.to_dict(),
+        "locus_faithfulness_summary": summarise_locus_faithfulness(locus_faithfulness),
         "cross_document_success_rate": round(cross_doc_success, 4),
         "citation_accuracy": round(avg_citation_accuracy, 4),
         "correction_rate": round(correction_rate, 4),

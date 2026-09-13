@@ -50,16 +50,14 @@ logger = logging.getLogger(__name__)
 # agent's tool outputs ARE the source evidence. S3 retrieves nothing: its
 # filings sit inlined in the system prompt and never pass through the message
 # history, so the only things reaching the verifier under the heading
-# "Retrieved source contexts" are `calculate` and `list_filings` returns. On
-# the 2026-09-08 reserve run that produced `revise` on 9 of 12 items, six of
-# them with a correct answer — the verifier was reading a bare "22.4005" and
-# correctly concluding that no revenue figure was grounded in it. The two
-# items that escaped were the two with no tool call at all, where the empty
-# placeholder happened to explain the situation.
+# "Retrieved source contexts" are `calculate` and `list_filings` returns.
+# Without this note the verifier reads a bare "22.4005" and correctly
+# concludes that no revenue figure is grounded in it, forcing a revision of
+# a correct answer.
 #
-# This note restores that explanation for every item. It scopes criterion 1
-# only; the criteria that remain checkable stay in force, including the rule
-# against a refusal claiming more than the filings support.
+# The note scopes criterion 1 only; the criteria that remain checkable stay
+# in force, including the rule against a refusal claiming more than the
+# filings support.
 _REFLECTION_EVIDENCE_NOTE = (
     "IMPORTANT — evidence basis of this system. It answers from SEC 10-K "
     "filings inlined verbatim in its own context window and performs no "

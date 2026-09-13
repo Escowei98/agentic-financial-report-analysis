@@ -1,14 +1,9 @@
 """Guards the single source of truth for the gold-standard path.
 
-Nine scripts each held their own literal path to the gold standard. When the
-corpus and the dataset moved to v4 on 2026-09-06, not one of them followed:
-the run pipeline, the report generator and the judge-validation batch were all
-still loading v3 — a file whose FA-3 questions ask about different fiscal
-years and whose doc ids point at filings outside the corpus. Nothing failed
-loudly; the run simply answered the previous version of the dataset.
-
-These tests make that failure mode visible the moment it is reintroduced.
-See EVAL_DECISION_LOG.md [2026-09-06].
+If every script held its own literal path, a dataset update could leave one
+of them silently loading the previous version: nothing would fail loudly, the
+run would simply answer a different dataset. These tests make that failure
+mode visible the moment it is introduced.
 """
 
 from __future__ import annotations
@@ -27,7 +22,6 @@ SCRIPTS_DIR = PROJECT_ROOT / "scripts"
 # must never spell out a gold-standard filename.
 ACTIVE_SCRIPTS = [
     "run_full_eval.py",
-    "run_mini_eval_complete.py",
     "run_judge_validation_batch.py",
     "generate_report.py",
 ]

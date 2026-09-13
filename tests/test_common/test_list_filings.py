@@ -68,7 +68,7 @@ class TestListFilings:
 
     def test_shows_which_prior_years_the_filing_reports(self):
         """Without this line the agents read "FY2024" as "FY2024 only" and
-        declined FY2023 questions as out of corpus (2026-09-09)."""
+        decline FY2023 questions as out of corpus."""
         filings = [_make_filing("AAPL", "2024", ["Financial Statements"])]
         result = create_list_filings_tool(filings).invoke({})
 

@@ -13,13 +13,12 @@ other.
 
 WHY THIS EXISTS
 ---------------
-The systems used to be told only "if the data is not in the filings, say so".
-Under that instruction a bare "I cannot answer" was the complete expected
-behaviour, and the FA-Refusal stratum could not distinguish the three defect
-classes it is built from: data outside the corpus, a false premise, and an
-underspecified question. For the latter two a bare abstention conflates "your
-question is faulty" with "I could not find it" -- only one of those shows the
-system recognised the defect.
+A bare "if the data is not in the filings, say so" would make "I cannot
+answer" the complete expected behaviour, and the FA-Refusal stratum could
+not distinguish the three defect classes it is built from: data outside the
+corpus, a false premise, and an underspecified question. For the latter two
+a bare abstention conflates "your question is faulty" with "I could not
+find it" -- only one of those shows the system recognised the defect.
 
 The four cases below are stated in a fixed order, but the systems are never
 told which case a given question falls into. Classifying it is the work being
@@ -35,10 +34,10 @@ This instruction also reaches the 120 answerable items, where it pushes
 towards declining. That cost is measured by the `over_refusal` control metric
 in the same run; it must not be left unmeasured.
 
-Case (a) names comparative columns since 2026-09-09: the corpus holds
-alternating fiscal years, so FY2023 exists only inside the FY2024 filing, and
-the systems were treating it as out of scope while the judge treated it as in
-scope. See src/common/corpus_coverage.py.
+Case (a) names comparative columns: the corpus holds alternating fiscal
+years, so FY2023 exists only inside the FY2024 filing, and the systems must
+not treat it as out of scope while the judge treats it as in scope. See
+src/common/corpus_coverage.py.
 """
 
 from src.common.corpus_coverage import COMPARATIVE_COLUMNS_NOTE

@@ -1,26 +1,17 @@
 """
 Trajectory rendering for the four systems.
 
-Turns a pipeline result object into a readable account of what the system did.
-This is documentation of a run, not an input to any metric.
+Turns a pipeline result object into a readable account of what the system
+did. This is documentation of a run, not an input to any metric: reasoning
+is scored off the uniform chain the systems emit
+(src/common/reasoning_chain_convention.py), because judging each
+architecture off its own trace format would bias the comparison.
 
-WHY IT SURVIVED THE 2026-09-08 REASONING REWRITE
-------------------------------------------------
-These formatters used to feed the Core/Agentic judge, which is gone: judging
-each architecture off its own trace format is what produced the differential
-bias that retired it. Reasoning is now scored off the uniform chain the
-systems emit (src/common/reasoning_chain_convention.py), not off this.
-
-The output is still needed, though, and by two consumers that are not metrics:
-`eval_runner` stores it per query in `detailed_results`, from which the
-human-rating page is built, and diagnostic write-ups such as
-data/results/judge_validation/s3_long_context_review.md read it directly. A
-rater or a reader still needs to see what the system actually did.
-
-`_WITHHELD_NOTE` and `_PRIMARY_SOURCE_TOOLS` therefore stay in force. No judge
-reads this any more, but a human rater does, and the asymmetry they guard
-against -- only S1 and S2 can show retrieved filing text at all -- applies to
-a human reading the page exactly as it did to the judge.
+`eval_runner` stores the rendering per query in `detailed_results`, where
+the human-validation sample and diagnostic write-ups read it. Since a human
+rater sees it, `_WITHHELD_NOTE` and `_PRIMARY_SOURCE_TOOLS` keep the four
+systems on equal footing: only S1 and S2 can show retrieved filing text at
+all.
 """
 
 import logging
@@ -28,16 +19,14 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-# Truncation limit for evidence text shown in trajectories (chunk_size in
-# rag_monolith.yaml/rag_agent.yaml is 1000 chars; this leaves headroom so a
-# full chunk is very rarely cut). Kept as a safety cap, not a normal-case
-# limit — see EVAL_DECISION_LOG.md [2026-08-01] "Trajectory truncation was
-# hiding retrieved evidence from the judge".
+# Truncation limit for evidence text shown in trajectories. chunk_size in
+# rag_monolith.yaml/rag_agent.yaml is 1000 chars, so this is a safety cap
+# that a full chunk very rarely hits.
 _EVIDENCE_CHAR_LIMIT = 1500
 
 
 # Tools whose output IS primary filing text. Their results are withheld from
-# the trajectory so that no architecture shows the judge more source text than
+# the trajectory so that no architecture shows a reader more source text than
 # another can (see _WITHHELD_NOTE). Tools that return a computed value or a
 # catalogue (calculate, list_filings) are not evidence and stay visible.
 _PRIMARY_SOURCE_TOOLS = {"retrieve_chunks", "search_section"}
@@ -47,11 +36,10 @@ _WITHHELD_NOTE = (
     "retrieved filing passages at all: S3 holds the whole corpus in its system "
     "prompt and S4 sees it through its specialists, so neither has an "
     "observable retrieval step to report. Showing the passages for the two "
-    "architectures that have them would have made Evidence Faithfulness a "
-    "measure of the instrumentation rather than of the system — S3 scored 1.89 "
-    "against 3.07-3.36 for the others on exactly that artefact. Judge grounding "
-    "from the answer's own citations, which every system produces in the same "
-    "(TICKER, FYYEAR, SECTION) form. See EVAL_DECISION_LOG.md [2026-09-06]."
+    "architectures that have them would make any reading of the trajectory a "
+    "measure of the instrumentation rather than of the system. Grounding is "
+    "judged from the answer's own citations, which every system produces in "
+    "the same (TICKER, FYYEAR, SECTION) form."
 )
 
 
@@ -60,8 +48,7 @@ def format_trajectory(result, system_name: str) -> str:
     Extract a human-readable trajectory from a pipeline result object.
 
     Converts the internal tool_calls_log, specialist_outputs, reflection
-    verdicts etc. into a structured text representation that the LLM judge
-    can evaluate.
+    verdicts etc. into a structured text representation.
 
     Args:
         result: One of RAGResult, AgentRAGResult, LongContextResult,
@@ -84,31 +71,6 @@ def format_trajectory(result, system_name: str) -> str:
         return f"[Unknown system: {system_name}]"
 
 
-# Truncation limit for evidence text shown in trajectories (chunk_size in
-# rag_monolith.yaml/rag_agent.yaml is 1000 chars; this leaves headroom so a
-# full chunk is very rarely cut). Kept as a safety cap, not a normal-case
-# limit — see EVAL_DECISION_LOG.md [2026-08-01] "Trajectory truncation was
-# hiding retrieved evidence from the judge".
-_EVIDENCE_CHAR_LIMIT = 1500
-
-
-# Tools whose output IS primary filing text. Their results are withheld from
-# the trajectory so that no architecture shows the judge more source text than
-# another can (see _WITHHELD_NOTE). Tools that return a computed value or a
-# catalogue (calculate, list_filings) are not evidence and stay visible.
-_PRIMARY_SOURCE_TOOLS = {"retrieve_chunks", "search_section"}
-
-_WITHHELD_NOTE = (
-    "Evidence text is deliberately not shown. Only S1 and S2 can surface "
-    "retrieved filing passages at all: S3 holds the whole corpus in its system "
-    "prompt and S4 sees it through its specialists, so neither has an "
-    "observable retrieval step to report. Showing the passages for the two "
-    "architectures that have them would have made Evidence Faithfulness a "
-    "measure of the instrumentation rather than of the system — S3 scored 1.89 "
-    "against 3.07-3.36 for the others on exactly that artefact. Judge grounding "
-    "from the answer's own citations, which every system produces in the same "
-    "(TICKER, FYYEAR, SECTION) form. See EVAL_DECISION_LOG.md [2026-09-06]."
-)
 
 
 def _context_sources(result) -> list[str]:
@@ -163,7 +125,6 @@ def _format_s1_trajectory(result) -> str:
     # process cannot be seen at all, while S4 keeps its full plan/delegation
     # trace and S2 exposes ticker/year/section through its tool arguments.
     # This line restores that parity and exposes no filing text.
-    # See EVAL_DECISION_LOG.md [2026-09-06].
     for i, source in enumerate(_context_sources(result), 1):
         lines.append(f"  Context {i}: {source}")
 

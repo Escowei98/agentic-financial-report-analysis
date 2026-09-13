@@ -7,7 +7,7 @@ Single source of truth: this text must match the "Answer Format
 Convention" section in data/gold_standard/gold_standard_README.md.
 Defined once and imported everywhere it's needed, rather than
 copy-pasted, so the four systems are guaranteed to receive byte-identical
-wording -- see EVAL_DECISION_LOG.md [2026-08-01].
+wording.
 """
 
 ANSWER_FORMAT_CONVENTION = (

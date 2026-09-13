@@ -274,11 +274,10 @@ def test_strict_citation_tolerates_stray_braces_around_ticker():
 
 
 class TestDocIdGroupScoring:
-    """v4's `doc_id_groups` records which filings are interchangeable for one
+    """`doc_id_groups` records which filings are interchangeable for one
     required fact. A 10-K carries the two preceding fiscal years in
-    comparative columns, so scoring the flat union marked a system down for
-    answering correctly out of fewer documents than the item lists.
-    See EVAL_DECISION_LOG.md [2026-09-06].
+    comparative columns, so scoring the flat union would mark a system down
+    for answering correctly out of fewer documents than the item lists.
     """
 
     def _item(self, groups, doc_ids, sections=None):

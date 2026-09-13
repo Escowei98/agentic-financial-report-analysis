@@ -3,34 +3,27 @@ Sensitivity check for the validity dimension.
 
 WHY THIS EXISTS
 ---------------
-In the pilot of 2026-09-08 the validity dimension came out at 1.00 for every
-system, and both the judge and the human rater used a single category across
-all 81 assessable transitions. Cohen's kappa and Gwet's AC1 are both
-undefined on a constant, so the dimension could not be validated at all --
-`NOT ESTIMABLE`, not PASS.
+On the validation sample the validity dimension is at its ceiling: judge and
+human rater use a single category across all assessable transitions. Cohen's
+kappa and Gwet's AC1 are both undefined on a constant, so the dimension
+cannot be validated on field data (`NOT ESTIMABLE`, not PASS), and a larger
+field sample does not help: if the base rate of the defect is near zero,
+500 units carry exactly as much information about the instrument as 81 do.
 
-A larger field sample does not fix that. If the base rate of the defect is
-near zero, 500 units carry exactly as much information about the instrument
-as 81 do. The floor effect is the problem, not n.
-
-Reading the chains explains the zero rate rather than excusing it: in all 15
-incomplete chains, a system that lacked a premise SAID SO and declined to
-conclude, instead of leaping. That is the behaviour V1 is meant to catch, and
-they do not exhibit it -- plausibly because NON_ANSWERABILITY_CONVENTION ends
-with "Never close such a gap with knowledge from outside the filings", which
-targets exactly it.
-
-So the open question is not "how often do the systems commit V1" (answer, in
-this corpus: never observed) but "would the instrument notice if they did".
+The systems avoid the defect for a reason. A system that lacks a premise
+SAYS SO and declines to conclude, instead of leaping -- plausibly because
+NON_ANSWERABILITY_CONVENTION ends with "Never close such a gap with
+knowledge from outside the filings". So the open question is not "how often
+do the systems commit V1" but "would the instrument notice if they did".
 That is answerable on constructed cases.
 
 WHAT IT DOES
 ------------
 Takes real chains from the run, and in half of them deletes the premise the
 final conclusion numerically depends on. The conclusion is left untouched, so
-it now asserts a comparison whose second term the chain never states -- a
+it asserts a comparison whose second term the chain never states -- a
 textbook V1. Controls pass through unchanged. Both are shuffled and judged
-blind, by the deployed prompt and by a human on the usual page.
+blind, by the deployed prompt and by a human rater.
 
 WHICH VARIANT OF V1 THIS TESTS
 ------------------------------
@@ -60,10 +53,9 @@ systems or a blind spot of the measurement.
 
 Usage:
     uv run python scripts/validity_sensitivity_test.py build
-    uv run python scripts/build_human_rating_ui.py --sample sensitivity
     uv run python scripts/validity_sensitivity_test.py judge
-    # rate the page, export, then:
-    uv run python scripts/merge_human_ratings.py --sample sensitivity <export.json>
+    # rate the blind CSV, then:
+    uv run python scripts/merge_human_ratings.py --sample sensitivity <ratings.json>
     uv run python scripts/validity_sensitivity_test.py analyze
 """
 
@@ -341,8 +333,6 @@ def main() -> int:
         n_pert, n_ctrl = build(csv_path, key_path)
         print(f"{n_pert} manipulierte + {n_ctrl} Kontrollketten -> {csv_path.name}")
         print(f"Schluessel (NICHT oeffnen, bis bewertet): {key_path.name}")
-        print("\nSeite bauen mit:")
-        print("  uv run python scripts/build_human_rating_ui.py --sample sensitivity")
         return 0
 
     if args.mode == "judge":

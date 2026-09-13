@@ -8,9 +8,7 @@
 # Note on scope: only the judge model is configurable. Which metrics are
 # computed is NOT a configuration choice — the metric set is fixed in code
 # (src/evaluation/{ragas,custom,citation,process,reasoning}_evaluator.py) and
-# documented in the thesis (Tabelle 6 and Tabelle 12). An earlier version of
-# base.yaml listed the metrics here as if they were configurable; nothing ever
-# read that list, so it has been removed rather than left as a lie.
+# documented in the thesis (Tabelle 6 and Tabelle 12).
 
 judge:
   # Shared LLM-as-a-judge for ALL evaluation judging: RAGAS metrics, the
@@ -20,7 +18,7 @@ judge:
   # `provider` is enforced at load time (see get_judge_llm): the judge must
   # come from a different model family than the Gemini models under test, so
   # that LLM-as-a-judge scoring is not affected by same-model self-preference
-  # bias (Panickssery et al., 2024). See EVAL_DECISION_LOG.md [2026-08-01].
+  # bias (Panickssery et al., 2024).
   provider: "openai"
   model: "gpt-4o-mini"
   temperature: 0.0

@@ -1,10 +1,9 @@
 """
 Consistency checks for the gold standard against the configured corpus.
 
-This is the guard that makes the original defect impossible to repeat: the
-first full n=150 run executed against 4 filings instead of 12 because nothing
-ever asserted that the corpus the systems see actually contains the documents
-the gold standard refers to.
+Asserts that the corpus the systems see actually contains the documents the
+gold standard refers to, and that the dataset itself is internally
+consistent. Run before any evaluation run.
 
 Checks
 ------
@@ -15,13 +14,13 @@ Checks
 3. groups       `doc_id_groups` is consistent with the flat `doc_ids` union
 4. reachability for items whose ground truth is a single reported figure,
                 that figure is actually present in at least one of the mapped
-                filings. Catches items that survived the doc-id remap
-                structurally but whose content is not in the corpus (e.g. a
-                headcount question when the mapped filing reports none).
+                filings. Catches items whose doc ids exist but whose content
+                is not in the corpus (e.g. a headcount question when the
+                mapped filing reports none).
                 Derived values (margins, growth rates, ratios) are reported as
                 "not directly checkable" rather than as failures -- they are
                 computed, not quoted.
-5. schema       columns added in v4/v5 are present and populated where required
+5. schema       the metadata columns are present and populated where required
 6. refusal      every FA-Refusal row carries a `refusal_evidence` class and a
                 `gt_correction`, `gt_value` stays empty, and a correction is
                 only demanded where the corpus can actually support one
@@ -130,12 +129,9 @@ def main(argv: list[str]) -> int:
         misaligned.append(f"Zeilenzahl {len(rows_de)} (de) vs. {len(rows_en)} (en)")
     else:
         # Every column except the three that legitimately differ by language
-        # (`query`, `gt_value`, `rationale`) must be identical. The earlier
-        # short list (id/fa_type/doc_ids/expected_answerable) let two real
-        # divergences through: `gt_unit` was empty on all 30 refusal rows in
-        # the English file where the German one carried `n/a`, and
-        # `source_sections` could drift silently. See EVAL_DECISION_LOG.md
-        # [2026-09-06].
+        # (`query`, `gt_value`, `rationale`) must be identical; a shorter
+        # list would let metadata such as `gt_unit` or `source_sections`
+        # drift silently between the two files.
         aligned_fields = [
             f for f in (rows_en[0].keys() if rows_en else [])
             if f not in ("query", "gt_value", "rationale", "gt_correction")
@@ -191,12 +187,11 @@ def main(argv: list[str]) -> int:
         f"({checked - unreachable}/{checked} geprueft, {uncheckable} abgeleitet/nicht pruefbar)"
     )
 
-    # --- 5. v4 schema -------------------------------------------------------
+    # --- 5. schema ----------------------------------------------------------
     header = list(rows_en[0].keys()) if rows_en else []
     schema_msgs = []
-    # There is deliberately no `expected_tools` column: the deterministic
-    # tool-selection metric was dropped (EVAL_DECISION_LOG 2026-08-15,
-    # upheld 2026-09-06). Its reappearance would be a regression.
+    # There is deliberately no `expected_tools` column: tool selection is
+    # out of scope of the evaluation.
     if "expected_tools" in header:
         failures.append(
             "Spalte expected_tools ist wieder da — die deterministische "
@@ -209,11 +204,11 @@ def main(argv: list[str]) -> int:
         if counts.get("within_window") != 15 or counts.get("cross_window") != 15:
             schema_msgs.append(f"FA-3 window_class nicht 15/15: {counts}")
     else:
-        schema_msgs.append("Spalte window_class fehlt noch (Phase 1b)")
+        schema_msgs.append("Spalte window_class fehlt")
     for msg in schema_msgs:
         print(f"[INFO] 5. {msg}")
 
-    # --- 6. refusal stratum (v5) --------------------------------------------
+    # --- 6. refusal stratum -------------------------------------------------
     #
     # The scoring of this stratum branches on `refusal_evidence`, so an
     # unclassified or mis-classified row does not fail loudly at run time --
@@ -278,9 +273,9 @@ def main(argv: list[str]) -> int:
             f"klassifiziert: {counts}"
         )
     else:
-        print("[INFO] 6. Spalte refusal_evidence fehlt (Datei aelter als v5)")
+        print("[INFO] 6. Spalte refusal_evidence fehlt")
 
-    # --- 7. reference decomposition (v6) ------------------------------------
+    # --- 7. reference decomposition -----------------------------------------
     #
     # Dimension 3 of the reasoning metric scores coverage against this column.
     # An empty cell on an answerable item does not fail at run time: the judge
@@ -304,12 +299,9 @@ def main(argv: list[str]) -> int:
                 decomposition_failures.append(
                     f"id {rid}: {len(tfs)} Teilfragen — vermutlich ein Parsefehler"
                 )
-            # The generator's fallback wordings. Both are legitimate DRAFT
-            # values but must not survive into a file used for scoring: a
-            # sub-question that does not name what to establish cannot be
-            # judged for coverage. The second pattern is the ratio variant
-            # ("the first component of Operating Margin"), corrected in v6.1
-            # by scripts/fix_v6_component_names.py.
+            # Placeholder wordings that must not survive into a file used
+            # for scoring: a sub-question that does not name what to
+            # establish cannot be judged for coverage.
             unresolved = [
                 t for t in tfs
                 if "the figure the question asks for" in t

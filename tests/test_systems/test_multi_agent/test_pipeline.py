@@ -198,13 +198,9 @@ class TestMultiAgentPipelineReflection:
 
     def test_verifier_receives_the_specialist_outputs_as_contexts(self):
         """The synthesizer answers from the specialist outputs and nothing
-        else, so those are what the verifier must check against.
-
-        This used to pass the fixed string "(Specialist outputs were provided
-        to the synthesizer)" — a sentence *about* evidence instead of the
-        evidence — which left the groundedness criterion with nothing to check
-        and drove `revise` on 6 of 12 items in the 2026-09-08 reserve run.
-        See EVAL_DECISION_LOG.md [2026-09-08].
+        else, so those are what the verifier must check against. A sentence
+        *about* the evidence would leave the groundedness criterion with
+        nothing to check.
         """
         from src.common.reflection import ReflectionVerdict
         self._run({
@@ -215,7 +211,7 @@ class TestMultiAgentPipelineReflection:
 
         contexts = self._pipeline._reflection_chain.invoke.call_args[0][0]["contexts"]
         assert "391,035 million" in contexts, (
-            "the verifier no longer sees the specialist evidence the "
+            "the verifier does not see the specialist evidence the "
             "synthesizer actually used"
         )
         assert "were provided to the synthesizer" not in contexts

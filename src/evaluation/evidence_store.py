@@ -10,16 +10,12 @@ WHY A LOOKUP AND NOT THE SYSTEM'S CONTEXT
 The obvious design is to show the judge the context the system actually had.
 It cannot be done symmetrically here. S3 and S4 hold ~609k tokens of corpus,
 which is not promptable; S1 and S2 hold a handful of retrieved chunks, which
-is. Feeding the judge whatever each architecture happens to expose is exactly
-what produced the differential bias the 2026-09-08 validation measured --
-`evidence_faithfulness` ran 2.75 points below the human raters for
-`long_context` and 0.42 for `rag_monolith`. `_WITHHELD_NOTE` in the retired
-reasoning_evaluator.py withheld retrieved text for that reason, which kept the
-comparison fair at the price of leaving the judge nothing to check against.
+is. Feeding the judge whatever each architecture happens to expose biases
+the comparison against the architectures that expose nothing.
 
-Anchoring on the cited locus resolves both problems at once: every system is
-verified against passages fetched by the same procedure, from the same corpus,
-in the same quantity, regardless of how it found them.
+Anchoring on the cited locus avoids that: every system is verified against
+passages fetched by the same procedure, from the same corpus, in the same
+quantity, regardless of how it found them.
 
 WHAT THIS DELIBERATELY DOES NOT DO
 ----------------------------------
@@ -29,8 +25,6 @@ groundedness check were itself retrieved, a retrieval miss would show up as a
 reasoning defect. Passage selection inside a section is lexical and
 deterministic (`_score_passage`), so the same step against the same corpus
 always yields the same evidence.
-
-See docs/decisions/REASONING_QUALITY_SPEC.md section 6.
 """
 
 from __future__ import annotations

@@ -17,8 +17,6 @@ Two jobs:
    `citation_accuracy` counts and hand the recall judges a second copy of
    every number.
 2. `parse_chain` turns the block into typed steps with their cited loci.
-
-See docs/decisions/REASONING_QUALITY_SPEC.md section 4.
 """
 
 from __future__ import annotations
