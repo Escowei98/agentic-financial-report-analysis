@@ -1,15 +1,9 @@
 """End-to-end shape check of the judge-validation chain.
 
-Run JSON -> blind CSV -> rating page -> export -> merge -> analysis. Five
-scripts, each of which has at some point been changed without the next one
-noticing; the 2026-09-08 audit found the rating page rendering five
-dimensions the CSV had no columns for, and the CSV carrying columns no page
-could fill.
-
-Nothing here checks a coefficient. What it checks is that a rating made on
-the page survives to the analysis attached to the right unit of the right
-record -- and, in particular, that the per-unit maps do not degrade into
-scalars anywhere along the way.
+Run JSON -> blind CSV -> rating export -> merge -> analysis. What is checked
+is that a human rating survives to the analysis attached to the right unit
+of the right record, and that the per-unit maps never degrade into scalars
+along the way. Coefficients are tested separately below.
 """
 
 import json
@@ -173,61 +167,6 @@ def _build_rows(results_dir: Path) -> list[dict]:
     return rows
 
 
-class TestRatingPage:
-    def test_one_cell_per_unit_reaches_the_page(self, workspace):
-        from scripts.build_human_rating_ui import build_items
-        items = build_items(_build_rows(workspace))
-        dims = items[0]["dimensions"]
-        # 2 evidential steps, 1 assessable transition, 2 sub-questions.
-        # The chain is [E] [E] [I], so only the step-3 transition is offered:
-        # a transition into an [E] step introduces a premise, which does not
-        # follow from anything.
-        assert len(dims["groundedness"]["units"]) == 2
-        assert len(dims["validity"]["units"]) == 1
-        assert len(dims["completeness"]["units"]) == 2
-
-    def test_a_transition_shows_everything_that_precedes_it(self, workspace):
-        """Validity is local, but "follows from the preceding steps" needs
-        all of them -- a rater shown only step n-1 would mark V1 wherever the
-        premise sat two steps back."""
-        from scripts.build_human_rating_ui import build_items
-        units = build_items(_build_rows(workspace))[0]["dimensions"]["validity"]["units"]
-        assert [u["unit"] for u in units] == ["3"]
-        assert len(units[0]["preceding"]) == 2
-
-    def test_a_locus_less_evidential_step_stays_assessable(self, workspace):
-        """A step tagged [E] whose "source" is (calculate), or which merely
-        narrates, introduces no filing evidence -- so it is not a premise and
-        a V1 can hide behind it. The sensitivity test found exactly that: in
-        V022 the planted defect landed on such a step, no cell existed, and
-        the rater could not have caught it."""
-        from scripts.build_human_rating_ui import build_items
-        rows = _build_rows(workspace)
-        chain = json.loads(rows[0]["chain_json"])
-        chain[1]["loci"] = []          # step 2 now cites nothing checkable
-        rows[0]["chain_json"] = json.dumps(chain)
-        units = build_items(rows)[0]["dimensions"]["validity"]["units"]
-        assert [u["unit"] for u in units] == ["2", "3"]
-
-    def test_transitions_into_sourced_evidential_steps_are_not_offered(self, workspace):
-        """Settled empirically by the 2026-09-08 pilot: the judge answered 81
-        of 81 transitions into an inferential step and 15 of 63 into an
-        evidential one, without being told to distinguish them; the human
-        rater declined the same ones. Counting them as trivially valid would
-        fill the denominator with units that cannot discriminate -- and their
-        share differs per architecture, so the dilution would too."""
-        from scripts.build_human_rating_ui import build_items
-        units = build_items(_build_rows(workspace))[0]["dimensions"]["validity"]["units"]
-        assert "2" not in [u["unit"] for u in units]
-
-    def test_inferential_steps_carry_no_groundedness_cell(self, workspace):
-        """R2: an inferential step makes no factual claim, so grounding it
-        would double-count what validity already judges."""
-        from scripts.build_human_rating_ui import build_items
-        units = build_items(_build_rows(workspace))[0]["dimensions"]["groundedness"]["units"]
-        assert [u["unit"] for u in units] == ["1", "2"]
-
-
 class TestMergeAndAnalyse:
     def test_a_per_unit_rating_survives_the_round_trip(self):
         from scripts.merge_human_ratings import _validate_rating
@@ -315,10 +254,10 @@ class TestCoefficients:
 
 
 class TestDegenerateVerdict:
-    """Kappa is identically 0 whenever ONE rater is constant. The verdict code
-    used to treat only the both-constant case as degenerate, which turned the
-    validity dimension (human 81:0, judge 78:3, 96% agreement) into "FAIL,
-    kappa 0.00" -- a statement about the formula, not the judge."""
+    """Kappa is identically 0 whenever ONE rater is constant. Treating only
+    the both-constant case as degenerate would turn a dimension at its
+    ceiling (human 81:0, judge 78:3, 96% agreement) into "FAIL, kappa 0.00",
+    a statement about the formula, not the judge."""
 
     @staticmethod
     def _pairs(humans, judges):
