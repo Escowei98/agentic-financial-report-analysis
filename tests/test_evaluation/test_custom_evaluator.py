@@ -94,7 +94,7 @@ def test_deterministic_match_percentage_point_rounding():
     ) is True
 
 def test_deterministic_match_pp_change_gt_unit():
-    # Gold standard v4 uses "pp_change" (distinct from "percent") for
+    # The gold standard uses "pp_change" (distinct from "percent") for
     # percentage-point deltas (e.g. id 106) -- must be handled the same way.
     assert _deterministic_numeric_match(
         "+2.0pp", "AAPL's gross margin changed by 2.1 percentage points.", "pp_change"
@@ -303,7 +303,7 @@ def test_percent_marker_in_answer_still_matches():
     ) is True
 
 def test_count_unit_is_never_decided_deterministically():
-    # gold standard v4 id 110 has gt_value "2" — a digit that shows up in
+    # gold standard id 110 has gt_value "2" — a digit that shows up in
     # almost any long answer, so counts always go to the LLM judge.
     assert _deterministic_numeric_match(
         "2", "The company operates 2 reportable segments.", "count"
@@ -438,8 +438,8 @@ class TestRefusalQuality:
         assert result.refusal_quality == 0.5
         assert mock_llm.invoke.call_count == 2
 
-    def test_stays_none_without_a_v5_reference(self):
-        """A pre-v5 file has no gt_correction. Grading against a blank
+    def test_stays_none_without_a_reference(self):
+        """An item without gt_correction has no reference. Grading against a blank
         reference would be worse than not grading at all."""
         item = _refusal_item(gt_correction="", refusal_evidence="")
         mock_llm = MagicMock()

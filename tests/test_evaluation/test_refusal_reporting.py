@@ -57,7 +57,7 @@ class TestExtraAggregates:
         assert extra["over_refusal_rate"] == 0.5
 
     def test_none_scores_are_skipped_not_counted_as_zero(self):
-        """A pre-v5 run has no refusal_quality at all. That must read as
+        """A run without refusal_quality scores has none at all. That must read as
         'not measured', not as a system that scored zero."""
         detailed = [_item("false_premise", False, refusal_accuracy=1.0)]
         extra = full_eval.compute_extra_aggregates(detailed)

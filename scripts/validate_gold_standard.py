@@ -28,7 +28,7 @@ Checks
 Exit code 0 = all checks passed, 1 = at least one hard failure.
 
 Usage:
-    uv run python scripts/validate_gold_standard.py [path/to/gold_standard.csv]
+    uv run python scripts/validate_gold_standard.py [path/to/english_gold_standard_csv]
 """
 
 from __future__ import annotations
@@ -138,7 +138,7 @@ def main(argv: list[str]) -> int:
         ]
         for de, en in zip(rows_de, rows_en):
             for field in aligned_fields:
-                # Case-insensitive: the files inherited "true"/"True" from v3.
+                # Case-insensitive: the files once mixed "true"/"True".
                 # Both are normalised to lowercase now, but the loader
                 # lowercases anyway, so the tolerance stays as a guard rather
                 # than as an accepted difference.
@@ -334,7 +334,7 @@ def main(argv: list[str]) -> int:
             f"({len(answerable_rows)} beantwortbare Items, {span} Teilfragen)"
         )
     else:
-        print("[INFO] 7. Spalte reference_decomposition fehlt (Datei aelter als v6)")
+        print("[INFO] 7. Spalte reference_decomposition fehlt (Datei ohne Referenzzerlegung)")
 
     print()
     for w in warnings:

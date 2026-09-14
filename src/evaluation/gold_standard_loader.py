@@ -2,7 +2,7 @@
 Gold standard loader.
 
 Two CSV schemas are read, both semicolon-delimited:
-  - the evaluation gold standard (data/gold_standard/gold_standard_v6*.csv):
+  - the evaluation gold standard (data/gold_standard/gold_standard*.csv):
     150 items in five strata (FA-1..FA-4 + FA-Refusal) with canonical source
     ids, acceptable-source groups (`doc_id_groups`), the FA-3 document
     window class, the refusal evidence class with its reference correction,
@@ -12,8 +12,9 @@ Two CSV schemas are read, both semicolon-delimited:
     ablation_test_data.csv): 8 columns, free-text source field, four query
     types. Used only for the S1 hyperparameter search.
 
-The schema is detected from the header. Fields one schema lacks are filled
-with defaults so consumers can rely on the unified GoldStandardItem.
+The schema is detected from the header. Fields one schema lacks, and
+optional evaluation columns a file does not carry, are filled with defaults
+so consumers can rely on the unified GoldStandardItem.
 
 Deliberately not part of the schema: an `expected_tools` column. Tool
 selection is out of scope of the evaluation.
@@ -32,33 +33,34 @@ _GS_DIR = _PROJECT_ROOT / "data" / "gold_standard"
 # --- The canonical gold standard -------------------------------------------
 #
 # Import these instead of spelling the filename out, so that every script
-# runs against the same dataset version (guarded by
+# runs against the same dataset (guarded by
 # tests/test_evaluation/test_gold_standard_path_discipline.py).
-GOLD_STANDARD_EN = _GS_DIR / "gold_standard_v6_en.csv"
+GOLD_STANDARD_EN = _GS_DIR / "gold_standard_en.csv"
 """English gold standard — what every system and evaluator runs against."""
 
-GOLD_STANDARD_DE = _GS_DIR / "gold_standard_v6.csv"
+GOLD_STANDARD_DE = _GS_DIR / "gold_standard.csv"
 """German source of record. Hand-maintained; the English file is patched
 cell-wise to match (see data/gold_standard/gold_standard_README.md,
 "Correction convention")."""
 
 
-# Mapping between v2 query_type freetext and v3 fa_type IDs.
-V2_TYPE_TO_FA_TYPE = {
+# Mapping between the ablation set's query_type freetext and fa_type IDs.
+ABLATION_TYPE_TO_FA_TYPE = {
     "Single": "FA-1",
     "Cross-Sec": "FA-2",
     "Multi-Year": "FA-3",
     "Multi-Comp": "FA-4",
 }
-FA_TYPE_TO_V2_TYPE = {v: k for k, v in V2_TYPE_TO_FA_TYPE.items()}
+FA_TYPE_TO_ABLATION_TYPE = {v: k for k, v in ABLATION_TYPE_TO_FA_TYPE.items()}
 
 
 @dataclass
 class GoldStandardItem:
     """A single gold-standard Q&A pair for evaluation.
 
-    Unified across v2 and v3 schemas. v2-only fields (`query_type`,
-    `source_section`) and v3-only fields (`fa_type`, `subtype`, ...)
+    Unified across the ablation and evaluation schemas. Ablation-only fields
+    (`query_type`, `source_section`) and evaluation-only fields (`fa_type`,
+    `subtype`, ...)
     are both present; the loader populates the appropriate ones based
     on the source schema. `question` and `ground_truth` are canonical
     fields that exist in both schemas.
@@ -83,7 +85,7 @@ class GoldStandardItem:
     math_type: str = ""
     hypothesis_link: list[str] = field(default_factory=list)
 
-    # --- v4 fields ---
+    # --- Citation sources and FA-3 window ---
     doc_id_groups: list[list[str]] = field(default_factory=list)
     """Acceptable citation sources, grouped by the fact each one supports.
 
@@ -103,7 +105,7 @@ class GoldStandardItem:
     strata.
     """
 
-    # --- v5 fields ---
+    # --- Refusal stratum ---
     refusal_evidence: str = ""
     """FA-Refusal only: what the corpus can actually support as a response.
 
@@ -119,7 +121,7 @@ class GoldStandardItem:
     violation this stratum is built to detect. Empty on answerable items.
     """
 
-    # --- v6 fields ---
+    # --- Reasoning completeness and refusal reference ---
     reference_decomposition: list[str] = field(default_factory=list)
     """Answerable items only: the sub-questions a complete chain must cover.
 
@@ -145,29 +147,22 @@ class GoldStandardItem:
     """
 
 
-def _detect_schema_version(header: list[str]) -> str:
-    """Return 'v6', 'v5', 'v4', 'v3' or 'v2' based on the header row."""
+def _detect_schema(header: list[str]) -> str:
+    """Return 'evaluation' or 'ablation' based on the header row."""
     normalized = [h.strip() for h in header]
     if normalized and normalized[0] == "id" and "fa_type" in normalized:
-        # Each bump is identified by the one column it introduced: v6 the
-        # reference decomposition, v5 the refusal-evidence classification, v4
-        # the acceptable-source groups. Newest first, since each schema also
-        # carries every column of the one before it.
-        if "reference_decomposition" in normalized:
-            return "v6"
-        if "refusal_evidence" in normalized:
-            return "v5"
-        return "v4" if "doc_id_groups" in normalized else "v3"
+        return "evaluation"
     if normalized and normalized[0] in ("ID", "#") and "Typ" in normalized:
-        return "v2"
+        return "ablation"
     raise ValueError(
         f"Unknown CSV schema. Header: {normalized!r}. "
-        f"Expected v2 ('ID;Typ;...'), or v3/v4/v5/v6 ('id;fa_type;...')."
+        f"Expected the ablation schema ('ID;Typ;...') or the evaluation "
+        f"schema ('id;fa_type;...')."
     )
 
 
-def _parse_v2_row(row: dict[str, str]) -> GoldStandardItem | None:
-    """Parse one v2 row into a GoldStandardItem (with v3 fields filled by defaults)."""
+def _parse_ablation_row(row: dict[str, str]) -> GoldStandardItem | None:
+    """Parse one ablation-set row (evaluation fields filled by defaults)."""
     raw_id = (row.get("ID") or row.get("#") or "").strip()
     if not raw_id:
         return None
@@ -176,8 +171,8 @@ def _parse_v2_row(row: dict[str, str]) -> GoldStandardItem | None:
     except ValueError:
         return None
 
-    v2_type = row.get("Typ", "").strip()
-    fa_type = V2_TYPE_TO_FA_TYPE.get(v2_type, "")
+    ablation_type = row.get("Typ", "").strip()
+    fa_type = ABLATION_TYPE_TO_FA_TYPE.get(ablation_type, "")
     doc_refs = row.get("Doc(s)", "").strip()
     question = row.get("Query", "").strip()
     ground_truth = (row.get("GT-Wert (manuell)") or row.get("GT-Wert", "")).strip()
@@ -190,7 +185,7 @@ def _parse_v2_row(row: dict[str, str]) -> GoldStandardItem | None:
         question=question,
         ground_truth=ground_truth,
         doc_refs=doc_refs,
-        query_type=v2_type,
+        query_type=ablation_type,
         source_section=source_section,
         rationale=rationale,
         entity_form=entity_form_raw or None,
@@ -199,12 +194,11 @@ def _parse_v2_row(row: dict[str, str]) -> GoldStandardItem | None:
     )
 
 
-def _parse_v3_row(row: dict[str, str]) -> GoldStandardItem | None:
-    """Parse one v3, v4, v5 or v6 row into a GoldStandardItem.
+def _parse_evaluation_row(row: dict[str, str]) -> GoldStandardItem | None:
+    """Parse one evaluation-schema row into a GoldStandardItem.
 
-    Handles all three schemas: every bump only adds columns, so the newer
-    fields resolve to their defaults on an older file and no separate parser
-    is needed. v2 fields are derived where possible.
+    Optional columns a file does not carry resolve to their defaults.
+    Ablation fields are derived where possible.
     """
     raw_id = row.get("id", "").strip()
     if not raw_id:
@@ -241,7 +235,7 @@ def _parse_v3_row(row: dict[str, str]) -> GoldStandardItem | None:
         question=row.get("query", "").strip(),
         ground_truth=row.get("gt_value", "").strip(),
         doc_refs=doc_ids_str,
-        query_type=FA_TYPE_TO_V2_TYPE.get(fa_type, fa_type),
+        query_type=FA_TYPE_TO_ABLATION_TYPE.get(fa_type, fa_type),
         source_section=source_sections_str,
         rationale=row.get("rationale", "").strip(),
         entity_form=entity_form,
@@ -275,16 +269,17 @@ def load_gold_standard(
 
     Args:
         csv_path: Path to the gold standard CSV.
-        filter_types: Optional list of types to include. Accepts both v2 names
+        filter_types: Optional list of types to include. Accepts both ablation names
             (``"Single"``, ``"Cross-Sec"``, ``"Multi-Year"``, ``"Multi-Comp"``)
-            and v3 IDs (``"FA-1"``..``"FA-4"``, ``"FA-Refusal"``). The two
-            naming schemes are matched against both ``query_type`` and
-            ``fa_type`` so a v2-style filter still works on a v3 file.
-        filter_subtype: Optional list of v3 subtypes to include (e.g.
-            ``["cagr", "max_min"]``). Ignored when loading a v2 CSV (no
+            and evaluation IDs (``"FA-1"``..``"FA-4"``, ``"FA-Refusal"``). The
+            two naming schemes are matched against both ``query_type`` and
+            ``fa_type`` so an ablation-style filter still works on the
+            evaluation file.
+        filter_subtype: Optional list of subtypes to include (e.g.
+            ``["cagr", "max_min"]``). Ignored when loading the ablation CSV (no
             subtype column available).
         filter_answerable: If set, restrict to rows whose
-            ``expected_answerable`` matches. Ignored when loading a v2 CSV
+            ``expected_answerable`` matches. Ignored when loading the ablation CSV
             (where every row is implicitly answerable).
     """
     csv_path = Path(csv_path)
@@ -297,23 +292,12 @@ def load_gold_standard(
         reader = csv.DictReader(f, delimiter=";")
         if reader.fieldnames is None:
             raise ValueError(f"Empty CSV: {csv_path}")
-        schema_version = _detect_schema_version(list(reader.fieldnames))
-        logger.debug("Detected schema version: %s", schema_version)
+        schema = _detect_schema(list(reader.fieldnames))
+        logger.debug("Detected schema: %s", schema)
+        parse_row = _parse_evaluation_row if schema == "evaluation" else _parse_ablation_row
 
         for row in reader:
-            # Membership test, not `!= "v2"`: a new schema version that
-            # nobody wired in here would otherwise be routed to the v2 parser,
-            # which returns None for every modern row and yields a silently
-            # empty dataset instead of an error.
-            if schema_version in ("v3", "v4", "v5", "v6"):
-                item = _parse_v3_row(row)
-            elif schema_version == "v2":
-                item = _parse_v2_row(row)
-            else:
-                raise ValueError(
-                    f"Schema version {schema_version!r} detected but no parser "
-                    f"is wired for it in load_gold_standard ({csv_path})."
-                )
+            item = parse_row(row)
             if item is None:
                 continue
 
@@ -334,7 +318,7 @@ def load_gold_standard(
         "Loaded %d gold-standard items from %s (schema=%s, type_filter=%s, subtype_filter=%s, answerable=%s)",
         len(items),
         csv_path.name,
-        schema_version,
+        schema,
         filter_types,
         filter_subtype,
         filter_answerable,

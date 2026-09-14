@@ -47,7 +47,7 @@
     "rag_monolith.yaml": "fd806ad32a045f66fcb7e46138925828df3cf81a7b01678acd8146658676d58c"
   },
   "gold_standard": {
-    "path": "data/gold_standard/gold_standard_v6_en.csv",
+    "path": "data/gold_standard/gold_standard_en.csv",
     "sha256": "921e41f493568a0ef82dd6241fb3a61c527794750e6819ede104cffa8c34481f",
     "items_in_file": 150,
     "items_evaluated": 150,

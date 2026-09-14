@@ -90,8 +90,8 @@ class TestRouting:
         assert len(out.splitlines()) >= 3
 
     def test_an_unknown_system_is_named_rather_than_silently_empty(self):
-        out = format_trajectory(_result("rag_agent"), "rag_agent_v2")
-        assert "Unknown system" in out and "rag_agent_v2" in out
+        out = format_trajectory(_result("rag_agent"), "rag_agent_unknown")
+        assert "Unknown system" in out and "rag_agent_unknown" in out
 
 
 class TestNoStepIsSilentlyDropped:
